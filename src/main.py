@@ -5,6 +5,8 @@ from time import sleep, time
 from tabulate import tabulate, SEPARATING_LINE, PRESERVE_WHITESPACE
 from textwrap import indent
 
+from platformdirs import user_documents_path
+
 
 # helpful docs and guides for reportlab, since i couldnt find any original nice docuentation by them
 # https://www.reportlab.com/docs/reportlab-reference.pdf
@@ -18,8 +20,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 import msvcrt
 import os
 
-from src.dbHandler import DBSession, PATH_ROOT
-from src.constants import *
+from dbHandler import DBSession, PATH_ROOT
+from constants import *
 
 
 SESSION = DBSession()
@@ -124,8 +126,6 @@ def visualize_readings():
     print( " --- ABLESUNGEN AUSGEBEN --- ", NL )
     
     data = SESSION.get_reading_all()
-    
-    print( data )
     
     table = get_tabular_reading_detail( data )
     
@@ -349,7 +349,12 @@ def export_to_pdf():
     # (595pt, 842pt)
     WIDTH, HEIGHT = A4
     
-    c = canvas.Canvas( exportName, A4, 0 )
+    file_name = user_documents_path().joinpath( exportName )
+    
+    file_name.unlink(True)
+    file_pdf = file_name.open("xb")
+    
+    c = canvas.Canvas( file_pdf, A4, 0 )
     
     # TITLE
     c.setFont( PDF_FONT_TITLE, 20 )
@@ -457,7 +462,8 @@ def export_to_pdf():
     
     c.save()
     
-    print( f"Protokoll am {date.today().strftime( DATE_STR_FORMAT )} über alle Werte wurde erstellt und als {exportName} gespeichert" )
+    print( '\t', f"Protokoll am {date.today().strftime( DATE_STR_FORMAT )} über alle Werte wurde erstellt" )
+    print( '\t', f"und als \"{exportName}\" in Ihrem Dokumenten-Ordner \"{user_documents_path()}\" gespeichert", NL )
     
     user_to_menu_prompt()
 
@@ -500,11 +506,23 @@ def format_person_data( name:str, move_in:date, move_out:date ) -> tuple[str, st
 
 def get_tabular_reading_simple( data:list[tuple[date, float, float, float]], tablefmt="psql" ) -> str:
     data = [ format_reading_data(*d) for d in data ]
-    return tabulate( data, headers=TABLE_HEADER_READINGS_SIMPLE, tablefmt=tablefmt, disable_numparse=False, colalign=('left', 'decimal', 'decimal', 'decimal') )
+    return tabulate(
+        data,
+        headers=TABLE_HEADER_READINGS_SIMPLE,
+        tablefmt=tablefmt,
+        disable_numparse=False,
+        colalign=('left', 'decimal', 'decimal', 'decimal')
+    )
 
 def get_tabular_person_simple( data:list[tuple[str, date, date]], tablefmt="psql" ) -> str:
     data = [ format_person_data(*d) for d in data ]
-    return tabulate( data, headers=TABLE_HEADER_PERSONS_SIMPLE, tablefmt=tablefmt, colalign=('right', 'center', 'center') )
+    return tabulate(
+        data, 
+        headers=TABLE_HEADER_PERSONS_SIMPLE, 
+        tablefmt=tablefmt, 
+        colalign=('right', 'center', 'center'), 
+        maxcolwidths=[15, None, None, None]
+    )
 
 
 def get_tabular_reading_detail( data:list[tuple[date, float, float, float]], tablefmt="grid" ) -> str:
@@ -524,10 +542,14 @@ def get_tabular_reading_detail( data:list[tuple[date, float, float, float]], tab
             format_decimal( w, DIGIT_LAYOUT_WATER       ) +NL+ format_decimal( delta_w/delta_d if delta_d else 0, DIGIT_LAYOUT_DELTA ) +" "+ format_decimal( delta_w, DIGIT_LAYOUT_WATER ),
         ])
     
-    print( table_data )
-    
     # return tabulate( table_data, headers=TABLE_HEADER_READINGS_DETAIL, tablefmt=tablefmt, disable_numparse=True, colalign=('left', 'decimal', 'decimal', 'decimal') )
-    return tabulate( table_data, headers=TABLE_HEADER_READINGS_DETAIL, tablefmt=tablefmt, disable_numparse=True, colalign=('left', 'center', 'center', 'center') )
+    return tabulate(
+        table_data,
+        headers=TABLE_HEADER_READINGS_DETAIL,
+        tablefmt=tablefmt,
+        disable_numparse=True,
+        colalign=('left', 'center', 'center', 'center')
+    )
 
 def get_tabular_person_detail( data:list[tuple[str, date, date]], tablefmt="grid" ) -> str:
     table_data = []
@@ -551,7 +573,14 @@ def get_tabular_person_detail( data:list[tuple[str, date, date]], tablefmt="grid
             invoices
         ])
     
-    return tabulate( table_data, headers=TABLE_HEADER_PERSONS_DETAIL, tablefmt=tablefmt, disable_numparse=True, colalign=('right', 'center', 'center', 'center', 'center') )
+    return tabulate(
+        table_data,
+        headers=TABLE_HEADER_PERSONS_DETAIL,
+        tablefmt=tablefmt,
+        disable_numparse=True,
+        colalign=('right', 'center', 'center', 'center', 'center'),
+        maxcolwidths=[15, None, None, None, None]
+    )
 
 
 def add_side_note_to_tabular( table:str, side_note:str, row:int ) -> str:
@@ -636,14 +665,7 @@ def loop():
 def main() -> None:
     os.system("@echo off")
     cls()
-
-    errorStr, sucess = DBSession().ping()
-    if not sucess:
-        print( "ERROR: connection error with database " )
-        print( errorStr )
-        input( " --- Press Enter to exit --- " )
-        return
-    
+        
     try:
         while True:
             loop()

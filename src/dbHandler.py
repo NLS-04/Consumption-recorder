@@ -1,9 +1,11 @@
+from constants import *
+
 import sqlite3
 import datetime
 
 from pathlib import Path
 
-from platformdirs import user_data_path, user_documents_path, user_runtime_path
+from platformdirs import user_data_path
 
   ############
  # SETTABLE #
@@ -12,13 +14,12 @@ from platformdirs import user_data_path, user_documents_path, user_runtime_path
 NAME_FILE_DB = "data.db"
 
 
-
   ###############
  # SOURCE CODE #
 ###############
 
 PATH_ROOT = Path(__file__).parent
-PATH_DB = user_data_path().joinpath(NAME_FILE_DB)
+PATH_DB = user_data_path( APP_NAME, APP_AUTHOR, roaming=False, ensure_exists=True ).joinpath(NAME_FILE_DB)
 
 
 class DBSession():
@@ -116,8 +117,7 @@ def fill_dummy_readings( amount:int = 50 ):
         )
     
 
-
-if __name__ == '__main__':
+if __name__ == '__main__':    
     s = DBSession()
     
     s.add_reading( datetime.date.today(), 1.0, 2.0, 0.0 )

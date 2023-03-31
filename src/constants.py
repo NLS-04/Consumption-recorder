@@ -1,13 +1,6 @@
-# Copyright (c) 2023, Schubert Nico (Github: NLS-04)
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree. 
-
-
 APP_NAME   = "Consumption recorder"
-APP_AUTHOR = "Github_" 
-VERSION    = '1.1'
+APP_AUTHOR = "github NLS-04" 
+VERSION    = '2.0'
 
 TITLE =\
 rf"""
@@ -26,15 +19,6 @@ rf"""
 |                                                            version: {VERSION:.3s} |
 + ----------------------------------------------------------------------- +
 """
-
-# MENUS = [ # OLD
-#     "Ablesungen einsehen",
-#     "Personen   einsehen",
-#     "Ablesungen hinzufügen / überschreiben",
-#     "Personen   hinzufügen / überschreiben",
-#     "Jahresabrechnung erstellen",
-#     "Protokoll exportieren - PDF",
-# ]
 
 from tabulate import SEPARATING_LINE
 

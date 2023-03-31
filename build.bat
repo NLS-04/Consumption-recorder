@@ -1,1 +1,0 @@
-python -m PyInstaller main.py -D -y --debug=all
