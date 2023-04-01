@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\__UNI\_projects\Consumption-recorder"
+VIRTUAL_ENV="D:\__Documents\__python__\Projects\Consumption-recorder"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

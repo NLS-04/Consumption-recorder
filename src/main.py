@@ -487,7 +487,7 @@ def format_decimal( value:float, digit_layout:tuple[int, int], alignement_format
         return formated_digits
     
     return ( "{:%s%ds}" % ( alignement_format, format_size ) ).format( formated_digits )
-        
+
 
 def format_reading_data( d:date, e:float, g:float, w:float ) -> tuple[str, str, str, str]:
     return (
@@ -527,7 +527,6 @@ def get_tabular_person_simple( data:list[tuple[str, date, date]], tablefmt="psql
 
 def get_tabular_reading_detail( data:list[tuple[date, float, float, float]], tablefmt="grid" ) -> str:
     table_data = []
-    
     for i, (d, e, g, w) in enumerate( data ):
         delta_d = (d - data[i-1][0]).days if i > 0 else 0
         delta_e = (e - data[i-1][1]) if i > 0 else 0
@@ -542,7 +541,9 @@ def get_tabular_reading_detail( data:list[tuple[date, float, float, float]], tab
             format_decimal( w, DIGIT_LAYOUT_WATER       ) +NL+ format_decimal( delta_w/delta_d if delta_d else 0, DIGIT_LAYOUT_DELTA ) +" "+ format_decimal( delta_w, DIGIT_LAYOUT_WATER ),
         ])
     
-    # return tabulate( table_data, headers=TABLE_HEADER_READINGS_DETAIL, tablefmt=tablefmt, disable_numparse=True, colalign=('left', 'decimal', 'decimal', 'decimal') )
+    if not data: # Database has no entries
+        table_data = [["no data"]*len(TABLE_HEADER_READINGS_DETAIL)]
+    
     return tabulate(
         table_data,
         headers=TABLE_HEADER_READINGS_DETAIL,
@@ -572,6 +573,9 @@ def get_tabular_person_detail( data:list[tuple[str, date, date]], tablefmt="grid
             effective_months_str,
             invoices
         ])
+        
+    if not data: # Database has no entries
+        table_data = [["no data"]*len(TABLE_HEADER_PERSONS_DETAIL)]
     
     return tabulate(
         table_data,
