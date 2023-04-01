@@ -608,26 +608,6 @@ def add_info_pdf_page( canv:canvas.Canvas ) -> None:
     canv.drawString( 1*cm, canv._pagesize[1]-2*mm, f"PDF created {datetime.utcnow().strftime('%Y-%m-%m %H:%M:%S')}" )
     
     canv.setFont( f, fs, lead )
-    
-def perform_debug() -> None:
-    #! highly dangerous should be removed on distribution !!!!
-    
-    cls()
-    os.system("@echo on")
-    
-    print( PATH_ROOT )
-    print( PATH_ROOT.absolute() )
-    print( "console:" )
-    
-    while True:
-        inputStr = input()
-        
-        if inputStr.strip().lower() == "exit":
-            break
-        
-        os.system( inputStr )
-        
-    os.system("@echo off")
 
 
 MENU_OPTIONS = [
@@ -645,10 +625,6 @@ def loop():
     flush_menu()
     
     option:str = input("Action auswählen: ").strip().lower()
-    
-    if option == "-d":
-        perform_debug()
-        return
     
     if not option.isdigit():
         return
