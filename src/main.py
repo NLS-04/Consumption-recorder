@@ -50,15 +50,13 @@ def print_menu_options():
 def user_decline_prompt():
     print( " --- Handlung wurde abgebrochen" )
     user_to_menu_prompt()
-    
+
 def user_to_menu_prompt():
-    input( " --- Eingabe-Taste drücken um in das Menü zurück zukeheren" )
-    
+    input( " --- Eingabe-Taste drücken um in das Menü zurückzukehren" )
 
 
-def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:bool=True, prompt_name:str="Datum:" ) -> date or None:
-    PLACE_HOLDER = '_'
-    
+
+def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:bool=True, prompt_name:str="Datum:" ) -> date or None:    
     # data:layout = 'ddmmyyyy'
     #                01234567
     data = ( prefillDateISO + PLACE_HOLDER*8 )[:8] # right padding with place holder chars
@@ -90,10 +88,17 @@ def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:
             
             print( console_out(), end='\r' )
 
-def get_general( title:str, digit_count:tuple[int, int] ):
-    PLACE_HOLDER = '_'
+def get_general( title:str, digit_count:tuple[int, int], prefill:float=None ):
+    digit_sum = digit_count[0] + digit_count[1]
     
-    data = PLACE_HOLDER*(digit_count[0]+digit_count[1])
+    if not prefill:
+        prefill = ''
+    else:
+        prefill = float(prefill) # assure float-type
+        prefill = str( floor(prefill) ) + str( prefill - floor(prefill) )[2:]  # format to string and remove decimal separator (comma or point)
+    
+    # data = ( PLACE_HOLDER*digit_sum + prefill )[:digit_sum] # right padding with place holder chars
+    data = ( "{:_>%ds}" % digit_sum ).format( prefill )[:digit_sum]
     
     console_out = lambda: f"\t{title} {data[0:digit_count[0]]}.{data[digit_count[0]:]}" + ' '*30
     
@@ -104,7 +109,7 @@ def get_general( title:str, digit_count:tuple[int, int] ):
         if key == '\r': # enter keycode
             try:
                 value = float( f"{data[0:digit_count[0]]}.{data[digit_count[0]:]}".replace(PLACE_HOLDER, '0') )
-                data = ("{:>%d.%df}" % (digit_count[0]+digit_count[1]+1, digit_count[1])).format( value ).replace('.', '')
+                data = ("{:>%d.%df}" % (digit_sum+1, digit_count[1])).format( value ).replace('.', '')
                 print( console_out(), end='\r' )
                 return value
             except ValueError as e:
@@ -149,12 +154,16 @@ def manipulate_readings():
     print( " --- ABLESUNG HINZUFÜGEN / ÜBERSCHREIBEN --- ", NL )
     #todo: better description
     
-    d = get_date();                                         print()
-    e = get_general("Strom: ", DIGIT_LAYOUT_ELECTRICITY);   print()
-    g = get_general("Gas:   ", DIGIT_LAYOUT_GAS);           print()
-    w = get_general("Wasser:", DIGIT_LAYOUT_WATER);         print()
+    
+    d = get_date();                                             print()
     
     exists, data = SESSION.exists_readings( d, d )
+    _, e, g, w = data[0] if exists else ( None, None, None, None )
+        
+    e = get_general("Strom: ", DIGIT_LAYOUT_ELECTRICITY, e );   print()
+    g = get_general("Gas:   ", DIGIT_LAYOUT_GAS        , g );   print()
+    w = get_general("Wasser:", DIGIT_LAYOUT_WATER      , w );   print()
+    
     sleep(KEYBOARD_SLEEP_TIME)
     print()
     
@@ -229,7 +238,7 @@ def delete_reading():
         [ "1)", "Einen Eintrag entfernen" ],
         [ "2)", "Mehrere Einträge entfernen" ],
         SEPARATING_LINE,
-        [ "3-9)", "Zum Menü zurück kehren" ],
+        [ "3-9)", "Zum Menü zurückkehren" ],
     ], tablefmt="simple", disable_numparse=True, colalign=('right', 'left') )
     
     print( "Eine Option mit den Tasten 1-9 auswählen" )
@@ -336,7 +345,7 @@ def delete_person():
 
 def do_invoice():
     print( " --- ABRECHNUNG DURCHFÜHREN --- ", NL )
-    print( "INOP" )
+    print( "INOP", NL )
     
     user_to_menu_prompt()
 
@@ -476,9 +485,9 @@ def format_decimal( value:float, digit_layout:tuple[int, int], alignement_format
     # >>> digit_layout = (2,3)
     # abs_max = 10**digit_layout[0] - 10**(-digit_layout[1]) = 100 - 0.001 = 99.999
     
-    # sum(digit_layout) + 1 + 1
-    # ^^^                 ^   ^
-    # number of digits   '.' '-' or ' '
+    # sum(digit_layout)  + 1     + 1
+    #       ^^^^          ^       ^^
+    # number of digits,  '.', '-' or ' '
     
     abs_max = 10**digit_layout[0] - 10**(-digit_layout[1])
     formated_digits = ( "{: >%d.%df}" % ( sum(digit_layout) + 1 + 1, digit_layout[1] ) ).format( max( -abs_max, min( value, abs_max ) ) )

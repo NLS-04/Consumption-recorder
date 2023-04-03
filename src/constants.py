@@ -1,6 +1,6 @@
 APP_NAME   = "Consumption recorder"
 APP_AUTHOR = "github NLS-04" 
-VERSION    = '2.0'
+VERSION    = '2.3'
 
 TITLE =\
 rf"""
@@ -46,6 +46,7 @@ DIGIT_LAYOUT_WATER       = (5,3)
 DIGIT_LAYOUT_DELTA       = (2,3)
 
 DATE_STR_FORMAT = "%d.%m.%Y"
+PLACE_HOLDER = '_'
 
 NAME_ELECTRICITY = "Strom"
 NAME_GAS         = "Gas"
