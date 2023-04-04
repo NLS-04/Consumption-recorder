@@ -92,14 +92,19 @@ def get_general( title:str, digit_count:tuple[int, int], prefill:float=None ):
     digit_sum = digit_count[0] + digit_count[1]
     
     if not prefill:
-        prefill = ''
+        data = PLACE_HOLDER * digit_sum
     else:
-        prefill = float(prefill) # assure float-type
-        prefill = str( floor(prefill) ) + str( prefill - floor(prefill) )[2:]  # format to string and remove decimal separator (comma or point)
-    
-    # data = ( PLACE_HOLDER*digit_sum + prefill )[:digit_sum] # right padding with place holder chars
-    data = ( "{:_>%ds}" % digit_sum ).format( prefill )[:digit_sum]
-    
+        # assure float-type
+        prefill = float(prefill)
+        
+        
+        # transform float to the needed str format, so that the user input can correctly be entred
+        # { str(floor(prefill)) : PLACE_HOLDER > digit_count[0] s }         right fit pre-period digits with leading PLACE_HOLDER chars
+        # { str( prefill - floor(prefill) )[2:] : 0 < digit_count[1] s }    left fit post-period digits with trealing zeros
+        # str( round( prefill - floor(prefill), digit_count[1] ) )[2:]      string of the decimal part of the float, will always be leading with '0.', therefor slice string [2:]
+        # round( prefill - floor(prefill), digit_count[1] )                 assure only digit_count[1] amount of digits after the period
+        data = ( "{:%s>%ds}{:0<%ds}" % (PLACE_HOLDER, digit_count[0], digit_count[1]) ).format( str( floor(prefill) ), str( round( prefill - floor(prefill), digit_count[1] ) )[2:] )
+        
     console_out = lambda: f"\t{title} {data[0:digit_count[0]]}.{data[digit_count[0]:]}" + ' '*30
     
     print( console_out(), end='\r' )
@@ -108,9 +113,13 @@ def get_general( title:str, digit_count:tuple[int, int], prefill:float=None ):
         
         if key == '\r': # enter keycode
             try:
-                value = float( f"{data[0:digit_count[0]]}.{data[digit_count[0]:]}".replace(PLACE_HOLDER, '0') )
+                # reconstruct the value as a string of float format
+                value = float( f"{data[:digit_count[0]]}.{data[digit_count[0]:]}".replace(PLACE_HOLDER, '0') )
+                
+                # update data with zero-padding and print to screen as user feedback
                 data = ("{:>%d.%df}" % (digit_sum+1, digit_count[1])).format( value ).replace('.', '')
                 print( console_out(), end='\r' )
+                
                 return value
             except ValueError as e:
                 pass
