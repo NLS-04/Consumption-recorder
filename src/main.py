@@ -528,7 +528,7 @@ def get_tabular_reading_simple( data:list[tuple[date, float, float, float]], tab
         data,
         headers=TABLE_HEADER_READINGS_SIMPLE,
         tablefmt=tablefmt,
-        disable_numparse=False,
+        disable_numparse=True,
         colalign=('left', 'decimal', 'decimal', 'decimal')
     )
 
