@@ -1,0 +1,2 @@
+build_folder.bat
+build_deploy.bat

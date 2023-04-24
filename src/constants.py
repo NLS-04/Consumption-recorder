@@ -1,6 +1,6 @@
 APP_NAME   = "Consumption recorder"
 APP_AUTHOR = "github NLS-04" 
-VERSION    = '2.3'
+VERSION    = '2.4'
 
 TITLE =\
 rf"""
@@ -52,19 +52,42 @@ NAME_ELECTRICITY = "Strom"
 NAME_GAS         = "Gas"
 NAME_WATER       = "Wasser"
 
+LIST_READING_OBJ_NAMES = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
+LIST_DIGIT_OBJ_LAYOUTS = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
 
 TABLE_HEADER_READINGS_SIMPLE = [ "Datum", NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
 TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugs-\ndatum", "Auszugs-\ndatum"]
 
-TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", f"{NAME_ELECTRICITY:^17s}\nDelta/Tag   Delta", f"{NAME_GAS:^17s}\nDelta/Tag   Delta", f"{NAME_WATER:^17s}\nDelta/Tag   Delta" ]
+__TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche"
+__TABLE_H_R_D_FORMAT = "{:^17s}\nDelta/Tag   Delta"
+TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", *[ __TABLE_H_R_D_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
+TABLE_HEADER_READINGS_MONTHS = [ "Monat\nAnz. Eintr.   Zeitspanne", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
 TABLE_HEADER_PERSONS_DETAIL  = [ "Name", "Einzugs-\ndatum", "Auszugs-\ndatum", "Bewohnte-\nmonate", "Voraussichtliche\nAbrechungen" ]
 
 PDF_FONT_TABLE = "Courier"
 PDF_FONT_TITLE = "Courier-Bold"
 PDF_FONTSIZE_NOTES = 7
 
-
 NL = '\n'
+
+
+# ord keycodes for msvcrt getch/getwch user console input
+KEY_BACKSPACE = 8
+KEY_TAB       = 9
+KEY_ESC       = 27
+KEY_ENTER     = 13
+KEY_SPACE     = 32
+
+KEY_CTRL_BACKSPACE = 127
+KEY_CTRL_C    = 3
+
+# special keys consists of two getch or getwch with the first one being 224
+KEY_SPECIAL = 224
+KEY_LEFT    = 75
+KEY_UP      = 72
+KEY_RIGHT   = 77
+KEY_DOWN    = 80
+
 
 if __name__ == "__main__":
     print( *TABLE_HEADER_READINGS_DETAIL, sep=2*NL )
