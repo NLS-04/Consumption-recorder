@@ -33,6 +33,7 @@ from constants import *
 #// TODO visualize_person:    person with moving_in date in the future and no moving_out date has negative amount of occupancy months
 #// TODO visaulize_reading:   add table of monthly and yearly averages and add it to the pdf output
 #// TODO visaulize_reading:   add better key input with arrow cursur moving
+#// TODO visualize_readding:  fix broken curser input for get_general
 # TODO visaulize_reading:   add predicitons for the upcoming invoice's compensation payment
 # TODO do_invoice:          complete invoice
 # TODO ...:                 add descriptions to all menu/interaction pages
@@ -69,7 +70,7 @@ def user_to_menu_prompt():
     input( " --- Eingabe-Taste drücken um in das Menü zurückzukehren" )
 
 
-def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur_char_data:str="_", cursur_char_placeholder:str=" " ) -> int:
+def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur_char_data:str='_', cursur_char_placeholder:str=' ' ) -> int:
     period = 0.5
     time_next_flip = -1
     cursur_on = False
@@ -79,8 +80,9 @@ def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur
         if time() >= time_next_flip:
             time_next_flip = time() + period
             
+            # cursur = not cursur; if cursur: ...
             if cursur_on := not cursur_on:
-                current_data = data[:cursur_ptr] + (cursur_char_data if data[min(cursur_ptr, len(cursur_char_data))] == PLACE_HOLDER else cursur_char_placeholder) + data[cursur_ptr+1:]
+                current_data = data[:cursur_ptr] + (cursur_char_placeholder if data[min(max(0, cursur_ptr), len(data)-1)] == PLACE_HOLDER else cursur_char_data) + data[cursur_ptr+1:]
             else:
                 current_data = data
         print( console_out_function( current_data ), end='\r' )
@@ -94,7 +96,7 @@ def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:
     # data:layout = 'ddmmyyyy'
     #                01234567
     data = ( prefillDateISO + PLACE_HOLDER*8 )[:8] # right padding with place holder chars
-    data_ptr = max( 0, len(prefillDateISO) )
+    data_ptr = max( 0, len(prefillDateISO)-1 )
     
     console_out_explicit = lambda pn, d: f"\t{pn} {d[0:2]}.{d[2:4]}.{d[4:8]}"
     console_out = lambda: console_out_explicit( prompt_name, data )
@@ -116,6 +118,8 @@ def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:
                 if not date_predicat( supplied_date ):
                     raise ValueError()
                 
+                print( console_out(), end='\r' )
+                
                 return supplied_date
             except ValueError:
                 print( console_out() + "\t - INVALID ENTRY", end='\r' )
@@ -125,7 +129,7 @@ def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:
         # digit keycode (ord[48-57] mapping to str[0-9])
         if 48 <= key <= 57:
             data = data[:data_ptr] + chr(key) + data[data_ptr+1:]
-            data_ptr = min( data_ptr+1, 8 )
+            data_ptr = min( data_ptr+1, 7 )
         
         # complete line delete
         if key == KEY_CTRL_BACKSPACE:
@@ -134,8 +138,8 @@ def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:
         
         # single character delete
         if key == KEY_BACKSPACE:
-            data_ptr = max(0, data_ptr-1)
             data = data[:data_ptr] + PLACE_HOLDER + data[data_ptr+1:]
+            data_ptr = max(0, data_ptr-1)
         
         # moving cursur
         if key == KEY_SPECIAL:
@@ -145,7 +149,7 @@ def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:
                 data_ptr = max(0, data_ptr-1)
                 
             if key == KEY_RIGHT:
-                data_ptr = min( data_ptr+1, 8 )
+                data_ptr = min( data_ptr+1, 7 )
         
         # update visuals
         print( ' '*60, end='\r' )
@@ -193,8 +197,15 @@ def get_general( prompt_name:str, digit_count:tuple[int, int], prefill:float=Non
         else:
             # digit keycode (ord[48-57] mapping to str[0-9])
             if 48 <= key <= 57:
-                data = data[:data_ptr] + chr(key) + data[data_ptr+1:]
-                data_ptr = min( data_ptr+1, digit_sum - 1 )
+                # curser at trailing position
+                if data_ptr == digit_sum-1:
+                    if data[0] == PLACE_HOLDER:
+                        # left shift data array and append user input (key) at end, if data has empty leading slots
+                        data = data[1:] + chr(key)
+                        print( console_out(), end='\r' )
+                else:
+                    data = data[:data_ptr] + chr(key) + data[data_ptr+1:]
+                    data_ptr = min( data_ptr+1, digit_sum - 1 )
             
             # complete line delete
             if key == KEY_CTRL_BACKSPACE:
@@ -203,9 +214,11 @@ def get_general( prompt_name:str, digit_count:tuple[int, int], prefill:float=Non
             
             # single character delete
             if key == KEY_BACKSPACE:
-                # data = PLACE_HOLDER + data[:len(data)-1]
-                data = data[:data_ptr] + PLACE_HOLDER + data[data_ptr+1:]
-                data_ptr = max(0, data_ptr-1)
+                if data_ptr == digit_sum-1:
+                    data = PLACE_HOLDER + data[:len(data)-1]
+                else:
+                    data = data[:data_ptr] + PLACE_HOLDER + data[data_ptr+1:]
+                    data_ptr = max(0, data_ptr-1)
             
             # moving cursur
             if key == KEY_SPECIAL:
@@ -215,7 +228,7 @@ def get_general( prompt_name:str, digit_count:tuple[int, int], prefill:float=Non
                     data_ptr = max(0, data_ptr-1)
                     
                 if key == KEY_RIGHT:
-                    data_ptr = min( data_ptr+1, 8 )
+                    data_ptr = min( data_ptr+1, digit_sum-1 )
             
         # update visuals
         print( ' '*60, end='\r' )
@@ -297,6 +310,10 @@ def manipulate_persons():
     print( " --- PERSON HINZUFÜGEN / ÜBERSCHREIBEN --- ", NL )
     #todo: better description
     
+    print_all_names()
+    
+    print( "Name der zu hinzufügenden oder zu überschreibenden Person eingeben", NL )
+    
     prompts_name = "        Name:"
     prompts_din  = "Einzugsdatum:"
     prompts_dout = "Auszugsdatum:"
@@ -365,6 +382,7 @@ def delete_reading():
         
         if not exists:
             print( f"Kein Eintrag gefunden mit dem Datum: {d.strftime( DATE_STR_FORMAT )}", NL )
+            return
         
         print( add_side_note_to_tabular( get_tabular_reading_simple( data ), " <-- Entfernen ", -2 ), NL )
         
@@ -381,8 +399,8 @@ def delete_reading():
         
     if option == 2: # removing multiple entries
         print( "Daten für Zeitinterval der zu entfernenden Einträge eingeben", NL )
-        d_from = get_date( "", True, "Datum ab: " ); print()
-        d_till = get_date( "", True, "Datum bis:" ); print()
+        d_from = get_date( "", True, "Datum ab: " )                       ; print()
+        d_till = get_date( "", True, "Datum bis:", lambda d: d >= d_from ); print()
 
         exists, data = SESSION.exists_readings( d_from, d_till )
         sleep(KEYBOARD_SLEEP_TIME)
@@ -390,6 +408,7 @@ def delete_reading():
         
         if not exists:
             print( f"Keine Einträge gefunden im Zeitraum: {d_from.strftime( DATE_STR_FORMAT )} - {d_till.strftime( DATE_STR_FORMAT )}", NL )
+            return
         
         table = get_tabular_reading_simple( data )
         for i in range( len(data) ):
@@ -411,6 +430,8 @@ def delete_reading():
 def delete_person():
     print( " --- PERSON ENTFERNEN --- ", NL )
     #todo: better description
+    
+    print_all_names()
     
     print( "Name des zu entfernenden Eintrags eingeben", NL )
     
@@ -572,6 +593,17 @@ def export_to_pdf():
     print( '\t', f"Protokoll am {date.today().strftime( DATE_STR_FORMAT )} über alle Werte wurde erstellt", sep='' )
     print( '\t', f"und als \"{exportName}\" in Ihrem Dokumenten-Ordner \"{user_documents_path()}\" gespeichert", sep='' )
 
+
+def print_all_names( tablefmt="grid" ):
+    # print out all the names of the person in the database
+    
+    data = SESSION.get_person_all()
+    
+    names = [ [n] for n, *_ in data ]
+    
+    table = tabulate( names, headers=["Personen in der Datenbank"], tablefmt=tablefmt, colalign=['center'] )
+    
+    print( table, NL )
 
 
 def format_decimal( value:float, digit_layout:tuple[int, int], alignement_format:str='>', format_size:int=None ) -> str:
