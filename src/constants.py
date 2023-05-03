@@ -1,6 +1,6 @@
 APP_NAME   = "Consumption recorder"
 APP_AUTHOR = "github NLS-04" 
-VERSION    = '3.0'
+VERSION    = '3.1'
 
 TITLE =\
 rf"""
