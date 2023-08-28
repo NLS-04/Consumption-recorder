@@ -8,8 +8,11 @@ on:
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+  
+    strategy:
+      matrix:
+        specs: [main_file.spec, main_folder.spec]
 
     steps:
     - uses: actions/checkout@v2
@@ -18,9 +21,9 @@ jobs:
       uses: JackMcKew/pyinstaller-action-windows@python3-10-pyinstaller-5-3
       with:
         path: src
-        spec: main_file.spec
+        spec: ${{matrix.specs}}
 
     - uses: actions/upload-artifact@v2
       with:
-        name: name-of-artifact
+        name: build-assets
         path: src/dist/windows
