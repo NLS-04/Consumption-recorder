@@ -1,1 +1,4 @@
-python -m PyInstaller src\main.py -D -y --clean
+python -m PyInstaller src/main_folder.spec -y
+
+timeout 10
+EXIT
