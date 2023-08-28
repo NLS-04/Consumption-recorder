@@ -1,4 +1,4 @@
-python -m PyInstaller src/main_file.spec -y
+python -m PyInstaller main_file.spec -y
 
 timeout 10
 EXIT
