@@ -19,8 +19,7 @@ jobs:
 
     - name: Set VERSION
       run: |
-        ls -a -l
-        rm -y VERSION
+        rm -f VERSION
         echo "${{ github.ref }}\n" > VERSION
 
     - name: Package & Build Application
@@ -42,6 +41,13 @@ jobs:
         draft: true
         prerelease: true
         ###################
+
+    - name: Debug Test
+      run: |
+        cd dist
+        ls -a -l
+        cd windows
+        ls -a -l
     
     - name: Upload Build to Release
       id: upload-release-asset 
