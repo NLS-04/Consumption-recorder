@@ -26,7 +26,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='consumption-recorder-win11',
+    name='main',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -28,7 +28,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='consumption-recorder-win11',
+    name='main',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
