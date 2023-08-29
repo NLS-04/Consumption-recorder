@@ -1,0 +1,33 @@
+# UTF-8
+
+# 1 | f.readline()[0:-1]; reads first line of VERSION-file and discards the '\n' character !!! git action needs to add '\n' character then creating new VERSION-file
+# 2 | ${{1}}.split('.') + ['0', '0', '0', '0'][0:4]; transform '.' seperated string into tuple left-padded to length 4 with ZEROS
+# 3 | tuple( map( lambda x: int(x), ${{2}} ) ); maps tuple of strings from step 2 to int tuple
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers= (ver := ( f := open("VERSION", "r"), tuple( map( lambda x: int(x), (f.readline()[0:-1].split('.') + ['0', '0', '0', '0'])[0:4] ) ), f.close() )[1]),
+    prodvers= ver,
+    mask=0x3f,
+    flags=0x0,
+    OS=0x4,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+    ),
+  kids=[
+    StringFileInfo(
+      [
+      StringTable(
+        u'040904B0',
+        [StringStruct(u'CompanyName', u'NLS-04'),
+        StringStruct(u'FileDescription', u'Consumption Recorder'),
+        StringStruct(u'FileVersion', u'%d.%d.%d.%d (win7sp1_rtm.101119-1850)' % ver ),
+        StringStruct(u'InternalName', u'application'),
+        StringStruct(u'LegalCopyright', u'\xa9 BSD 3-Clause License. All rights reserved.'),
+        StringStruct(u'OriginalFilename', u'consumption-recorder-win11.exe'),
+        StringStruct(u'ProductName', u'NLS-04\xae Consumption Recorder\xae'),
+        StringStruct(u'ProductVersion', u'%d.%d.%d.%d' % ver)])
+      ]), 
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
