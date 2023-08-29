@@ -12,7 +12,8 @@ jobs:
   
     strategy:
       matrix:
-        specs: [main_file.spec, main_folder.spec]
+        #specs: [main_file.spec, main_folder.spec]
+        specs: [main_file.spec]
 
     steps:
     - uses: actions/checkout@v2
