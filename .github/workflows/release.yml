@@ -17,16 +17,27 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: Split Action
+      id: version-number
+      # You may pin to the exact commit or the version.
+      # uses: JungWinter/split@7f51d99e7cc1f147f6f99be75acf5e641930af88
+      uses: JungWinter/split@v2.1.0
+      with:
+        # String to split
+        msg: ${{ github.ref_name }}
+        # The delimiter to split the string
+        separator: v
+    
     - name: Set VERSION
       run: |
         rm -f VERSION
-        echo "${{ github.ref_name }}\n" > VERSION
+        echo "${{ steps.version-number.outputs._1 }}\n" > VERSION
 
     - name: Package & Build Application
       uses: JackMcKew/pyinstaller-action-windows@python3-10-pyinstaller-5-3
       with:
         path: .
-        spec: ${{matrix.specs}}
+        spec: ${{ matrix.specs }}
     
     - name: Create Release
       id: create_release
