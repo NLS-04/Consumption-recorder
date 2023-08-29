@@ -37,7 +37,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='resourceVersion.rc',
+    #version='resourceVersion.rc',
 )
 coll = COLLECT(
     exe,
