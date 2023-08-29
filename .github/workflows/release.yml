@@ -20,7 +20,7 @@ jobs:
     - name: Set VERSION
       run: |
         rm -f VERSION
-        echo "${{ github.ref }}\n" > VERSION
+        echo "${{ github.ref_name }}\n" > VERSION
 
     - name: Package & Build Application
       uses: JackMcKew/pyinstaller-action-windows@python3-10-pyinstaller-5-3
@@ -34,8 +34,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}
         body_path: release.md
         ################### ! FOR TESTING ONLY, SET TO false AFTER TESTING
         draft: true
