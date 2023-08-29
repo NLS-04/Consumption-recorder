@@ -31,7 +31,7 @@ jobs:
     - name: Set VERSION
       run: |
         rm -f VERSION
-        echo "${{ steps.version-number.outputs._1 }}\n" > VERSION
+        echo -e '${{ steps.version-number.outputs._1 }}\n' > VERSION
 
     - name: Package & Build Application
       uses: JackMcKew/pyinstaller-action-windows@python3-10-pyinstaller-5-3
