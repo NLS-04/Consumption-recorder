@@ -47,7 +47,7 @@ jobs:
       with:
         tag_name: ${{ github.ref_name }}
         release_name: ${{ github.ref_name }}
-        body_path: release.md
+        body_path: CHANGELOG.md
         ################### ! FOR TESTING ONLY, SET TO false AFTER TESTING
         draft: true
         prerelease: true
