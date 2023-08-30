@@ -56,8 +56,12 @@ class DBSession():
             return con.execute( """ SELECT * FROM readings ORDER BY date """ ).fetchall()
         
     def get_reading_where(self, where:str) -> list[tuple[datetime.date, float, float, float]]:
+        #! VERY DANGEROUS, BUT MEH
         with self as con:
             return con.execute( f""" SELECT * FROM readings WHERE {where} ORDER BY date """ ).fetchall()
+    
+    def get_reading_between(self, date_low_bound:datetime.date, date_up_bound:datetime.date) -> list[tuple[datetime.date, float, float, float]]:
+        return self.get_reading_where( "date BETWEEN '%s' AND '%s'" % (str(date_low_bound), str(date_up_bound)) )
     
     
     def get_person_all(self) -> list[tuple[str, datetime.date, datetime.date]]:

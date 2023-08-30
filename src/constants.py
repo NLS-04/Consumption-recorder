@@ -1,6 +1,17 @@
+from pathlib import Path
+
+
 APP_NAME   = "Consumption recorder"
 APP_AUTHOR = "github NLS-04" 
-VERSION    = '3.1'
+
+# Path to VERSION when executing .py
+versionPath = Path(__file__).parent.joinpath("VERSION")
+if not versionPath.exists():
+    # Path to VERSION when executing .exe
+    versionPath = Path(__file__).parent.parent.joinpath("VERSION")
+
+
+VERSION    = ( f := versionPath.open(), f.readline()[0:-1], f.close() )[1]
 
 TITLE =\
 rf"""
@@ -16,7 +27,7 @@ rf"""
 | | |_) || |  | (_) || |_| (_) ||   <| (_) || || || (_| || |_| (_) || |   |
 | | .__/ |_|   \___/  \__|\___/ |_|\_\\___/ |_||_| \__,_| \__|\___/ |_|   |
 | |_|                                                                     |
-|                                                            version: {VERSION:.3s} |
+| {('version: ' + VERSION):>71s} |
 + ----------------------------------------------------------------------- +
 """
 
@@ -32,9 +43,9 @@ MENUS = [
     [ "5)", "Ablesungen entfernen" ],
     [ "6)", "Personen   entfernen" ],
     SEPARATING_LINE,
-    # [ "7)", "Jahresabrechnung erstellen" ],
     [ "7)", "INOP - (Jahresabrechnung erstellen)" ],
-    [ "8)", "Protokoll exportieren - PDF" ],
+    [ "8)", "Analyse - manuell" ],
+    [ "9)", "Protokoll exportieren - PDF" ],
 ]
 
 KEYBOARD_SLEEP_TIME = 0.5
@@ -45,7 +56,11 @@ DIGIT_LAYOUT_GAS         = (5,3)
 DIGIT_LAYOUT_WATER       = (5,3)
 DIGIT_LAYOUT_DELTA       = (2,3)
 
-DATE_STR_FORMAT = "%d.%m.%Y"
+# see for further languange codes: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/a9eac961-e77d-41a6-90a5-ce1a8b0cdb9c?redirectedfrom=MSDN
+LANGUANGE_CODE = "de-DE"
+
+# DATE_STR_FORMAT = "%d.%m.%Y"
+DATE_STR_FORMAT = "%x"
 PLACE_HOLDER = '_'
 
 NAME_ELECTRICITY = "Strom"
@@ -58,10 +73,10 @@ LIST_DIGIT_OBJ_LAYOUTS = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAY
 TABLE_HEADER_READINGS_SIMPLE = [ "Datum", NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
 TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugs-\ndatum", "Auszugs-\ndatum"]
 
-__TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche"
+__TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche\nStandardabweichung p.Tag"
 __TABLE_H_R_D_FORMAT = "{:^17s}\nDelta/Tag   Delta"
 TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", *[ __TABLE_H_R_D_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
-TABLE_HEADER_READINGS_MONTHS = [ "Monat\nAnz. Eintr.   Zeitspanne", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
+TABLE_HEADER_READINGS_MONTHS = [ "Monat\nZeitspanne   Anz. Eintr.\nTage zw. Abls.|std. Abw.", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
 TABLE_HEADER_PERSONS_DETAIL  = [ "Name", "Einzugs-\ndatum", "Auszugs-\ndatum", "Bewohnte-\nmonate", "Voraussichtliche\nAbrechungen" ]
 
 PDF_FONT_TABLE = "Courier"
@@ -90,4 +105,4 @@ KEY_DOWN    = 80
 
 
 if __name__ == "__main__":
-    print( *TABLE_HEADER_READINGS_DETAIL, sep=2*NL )
+    print(TITLE)
