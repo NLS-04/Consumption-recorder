@@ -1,17 +1,31 @@
 from pathlib import Path
 
+  #####################
+ # RUNTIME DEPENDEND #
+#####################
+### PATHING ###
+PATH_ROOT = Path(__file__).parent
+
+# Path to VERSION when executing .exe
+PATH_VERSION = PATH_ROOT.joinpath("VERSION")
+if not PATH_VERSION.exists():
+    # Path to VERSION when executing .py
+    PATH_VERSION = PATH_ROOT.parent.joinpath("VERSION")
+
+# Path to ICON file when executing .exe
+PATH_ICON = PATH_ROOT.joinpath("main.ico")
+if not PATH_ICON.exists():
+    # Path to ICON file when executing .py
+    PATH_ICON = PATH_ROOT.parent.joinpath("main.ico")
+
+
+  ############################################
+ # SETTABLE CONSTANTS | RUNTIME INDEPENDEND #
+############################################
 
 APP_NAME   = "Consumption recorder"
-APP_AUTHOR = "github NLS-04" 
-
-# Path to VERSION when executing .py
-versionPath = Path(__file__).parent.joinpath("VERSION")
-if not versionPath.exists():
-    # Path to VERSION when executing .exe
-    versionPath = Path(__file__).parent.parent.joinpath("VERSION")
-
-
-VERSION    = ( f := versionPath.open(), f.readline()[0:-1], f.close() )[1]
+APP_AUTHOR = "github NLS-04"
+VERSION    = ( f := PATH_VERSION.open(), f.readline()[0:-1], f.close() )[1]
 
 TITLE =\
 rf"""

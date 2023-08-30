@@ -8,7 +8,7 @@ a = Analysis(
     ['src\\main.py'],
     pathex=[],
     binaries=[],
-    datas=[ ('VERSION', '.') ],
+    datas=[ ('VERSION', '.'), ('main.ico', '.') ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -26,7 +26,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='main',
+    name='consumption-recorder-win11',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -37,6 +37,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='main.ico',
     #version='resourceVersion.rc',
 )
 coll = COLLECT(
@@ -47,5 +48,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='consumption-recorder-win11',
+    name='main',
 )

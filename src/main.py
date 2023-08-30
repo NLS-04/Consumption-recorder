@@ -19,12 +19,14 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 # keystrokes access without input(...)
 import msvcrt
 
+import win32gui
+import win32con
 import os
 import locale
 import webbrowser
 
 # Custom packages
-from dbHandler import DBSession, PATH_ROOT
+from dbHandler import DBSession
 from constants import *
 
 
@@ -39,9 +41,15 @@ from constants import *
 #// TODO visualize_readding:  fix broken curser input for get_general
 
 #// TODO visaulize_reading:   installing a new meter causes negative extrapolation of the data
-#// TODO export_to_pdf:       put the readings conclusion on a new line to avoid bad page-breaks
+#// TODO export_to_pdf:       put the readings conclusion on a new line to (avoid bad page-breaks) improve readability
 #// TODO export_pdf:          open file in browser or explorer after generating
+#// TODO: ...                 add icon to project
+#// TODO: main.py:            add icon and title to terminal window
+#// TODO: .spec               add icon to .exe
+#// TODO: ...                 add CHANGELOG.md for automated releases
+# TODO .spec                add version-resource-file to .spec
 # TODO analyse:             add functionality to analyse timespans
+# TODO analyse:             add functionality to export anlysed timespan to pdf
 # TODO visaulize_reading:   add predicitons for the upcoming invoice's compensation payment
 # TODO do_invoice:          complete invoice
 # TODO ...:                 add descriptions to all menu/interaction pages
@@ -83,6 +91,31 @@ def user_decline_prompt():
 def user_to_menu_prompt():
     input( " --- Eingabe-Taste drücken um in das Menü zurückzukehren" )
 
+# !!! will freeze with wait_for_change=True when executing with VSCode, requires external terminal window
+def set_window_title( window_title_string, wait_for_change=False ) -> None:
+    os.system("title " + window_title_string)
+    
+    if (not wait_for_change):
+        return
+    
+    matched_window = 0
+    while (not matched_window):
+        matched_window = win32gui.FindWindow(None, window_title_string)
+        sleep(0.025) # To not flood it too much...
+
+def set_window_icon( window_title, image_path ):
+    hwnd  = win32gui.FindWindow(None, window_title)
+    hicon = win32gui.LoadImage(None, image_path, win32con.IMAGE_ICON, 0, 0, win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE)
+    
+    win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_SMALL, hicon)
+    win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_BIG, hicon)
+
+def set_title_and_icon(window_title, icon_path):
+    """Set the window title, wait for it to apply, then adjust the icon."""
+    window_title = set_window_title(window_title, wait_for_change=True)
+    set_window_icon(window_title, icon_path)
+    return window_title
+
 
 def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur_char_data:str='_', cursur_char_placeholder:str=' ' ) -> int:
     period = 0.5
@@ -103,10 +136,11 @@ def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur
         
     return ord(msvcrt.getwch())
 
-"""
-parameter date_predicat: after verifying if the user supplied date is a valid, the date_predicat takes the supplied date as input and returns true if the supplied date should be accepted in the current context
-"""
+
 def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:bool=True, prompt_name:str="Datum:", date_predicat=lambda d: True ) -> date or None:
+    """
+    parameter date_predicat: after verifying if the user supplied date is a valid, the date_predicat takes the supplied date as input and returns true if the supplied date should be accepted in the current context
+    """
     # data:layout = 'ddmmyyyy'
     #                01234567
     data = ( prefillDateISO + PLACE_HOLDER*8 )[:8] # right padding with place holder chars
@@ -1211,6 +1245,7 @@ def loop():
 
 def main() -> None:
     os.system("@echo off")
+    set_title_and_icon(APP_NAME, PATH_ICON.as_posix())
     cls()
         
     try:

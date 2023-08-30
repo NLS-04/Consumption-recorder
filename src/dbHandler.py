@@ -3,8 +3,6 @@ from constants import *
 import sqlite3
 import datetime
 
-from pathlib import Path
-
 from platformdirs import user_data_path
 
   ############
@@ -18,7 +16,6 @@ NAME_FILE_DB = "data.db"
  # SOURCE CODE #
 ###############
 
-PATH_ROOT = Path(__file__).parent
 PATH_DB = user_data_path( APP_NAME, APP_AUTHOR, roaming=False, ensure_exists=True ).joinpath(NAME_FILE_DB)
 
 
