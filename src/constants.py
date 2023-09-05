@@ -27,22 +27,42 @@ APP_NAME   = "Consumption recorder"
 APP_AUTHOR = "github NLS-04"
 VERSION    = ( f := PATH_VERSION.open(), f.readline()[0:-1], f.close() )[1]
 
+# sizes for console
+SIZE_DO_SET = False
+SIZE_SCREEN_BUFFER = 9001
+SIZE_AUTO = -0xff # do not change, even though the value is arbitrary, this is used as a flag/enum
+SIZE_SCALE_FACTOR = 0.95 # scalefactor influence the calculated max size of the console to have a margin between the window and the screen border (when autoscaling)
+
+# layout (no minSize): ( cols, lines )
+# layout (minSize):  ( ( cols, lines ), ( minCols, minLines ) )
+SIZE_MENU                = (  77, 36 ) # static
+SIZE_VISUALIZE_READINGS  = ( SIZE_AUTO, SIZE_AUTO ) # dynamic
+SIZE_VISUALIZE_PERSONS   = ( SIZE_AUTO, SIZE_AUTO ) # dynamic
+SIZE_MANIPULATE_READINGS = ( ( SIZE_AUTO, SIZE_AUTO ), ( 61, 20 ) )
+SIZE_MANIPULATE_PERSONS  = ( 66, SIZE_AUTO )
+SIZE_DELETE_READING      = ( 67, 27 ) # dynamic
+SIZE_DELETE_PERSON       = ( 57, SIZE_AUTO )
+SIZE_DO_INVOICE          = ( SIZE_AUTO, SIZE_AUTO )
+SIZE_DO_ANALYZE          = ( 117, 55 )
+SIZE_EXPORT_TO_PDF       = ( SIZE_AUTO, 6 )
+
+
 TITLE =\
 rf"""
-+ ----------------------------------------------------------------------- +
-| __     __           _                               _                   |
-| \ \   / /___  _ __ | |__   _ __  __ _  _   _   ___ | |__   ___          |
-|  \ \ / // _ \| '__|| '_ \ | '__|/ _` || | | | / __|| '_ \ / __| _____   |
-|   \ V /|  __/| |   | |_) || |  | (_| || |_| || (__ | | | |\__ \|_____|  |
-|    \_/  \___||_|   |_.__/ |_|   \__,_| \__,_| \___||_| |_||___/         |
-|                     _          _           _  _         _               |
-|  _ __   _ __  ___  | |_  ___  | | __ ___  | || |  __ _ | |_  ___   _ __ |
-| | '_ \ | '__|/ _ \ | __|/ _ \ | |/ // _ \ | || | / _` || __|/ _ \ | '__||
-| | |_) || |  | (_) || |_| (_) ||   <| (_) || || || (_| || |_| (_) || |   |
-| | .__/ |_|   \___/  \__|\___/ |_|\_\\___/ |_||_| \__,_| \__|\___/ |_|   |
-| |_|                                                                     |
-| {('version: ' + VERSION):>71s} |
-+ ----------------------------------------------------------------------- +
+ + ----------------------------------------------------------------------- +
+ | __     __           _                               _                   |
+ | \ \   / /___  _ __ | |__   _ __  __ _  _   _   ___ | |__   ___          |
+ |  \ \ / // _ \| '__|| '_ \ | '__|/ _` || | | | / __|| '_ \ / __| _____   |
+ |   \ V /|  __/| |   | |_) || |  | (_| || |_| || (__ | | | |\__ \|_____|  |
+ |    \_/  \___||_|   |_.__/ |_|   \__,_| \__,_| \___||_| |_||___/         |
+ |                     _          _           _  _         _               |
+ |  _ __   _ __  ___  | |_  ___  | | __ ___  | || |  __ _ | |_  ___   _ __ |
+ | | '_ \ | '__|/ _ \ | __|/ _ \ | |/ // _ \ | || | / _` || __|/ _ \ | '__||
+ | | |_) || |  | (_) || |_| (_) ||   <| (_) || || || (_| || |_| (_) || |   |
+ | | .__/ |_|   \___/  \__|\___/ |_|\_\\___/ |_||_| \__,_| \__|\___/ |_|   |
+ | |_|                                                                     |
+ | {('version: ' + VERSION):>71s} |
+ + ----------------------------------------------------------------------- +
 """
 
 from tabulate import SEPARATING_LINE
@@ -61,14 +81,25 @@ MENUS = [
     [ "8)", "Analyse - manuell" ],
     [ "9)", "Protokoll exportieren - PDF" ],
 ]
+SIZES = [
+    SIZE_VISUALIZE_READINGS,
+    SIZE_VISUALIZE_PERSONS,
+    SIZE_MANIPULATE_READINGS,
+    SIZE_MANIPULATE_PERSONS,
+    SIZE_DELETE_READING,
+    SIZE_DELETE_PERSON,
+    SIZE_DO_INVOICE,
+    SIZE_DO_ANALYZE,
+    SIZE_EXPORT_TO_PDF
+]
 
 KEYBOARD_SLEEP_TIME = 0.5
 
 # Digitscount (prePoint, postPoint)
-DIGIT_LAYOUT_ELECTRICITY = (6,1)
-DIGIT_LAYOUT_GAS         = (5,3)
-DIGIT_LAYOUT_WATER       = (5,3)
-DIGIT_LAYOUT_DELTA       = (2,3)
+DIGIT_LAYOUT_ELECTRICITY = ( 6, 1 )
+DIGIT_LAYOUT_GAS         = ( 5, 3 )
+DIGIT_LAYOUT_WATER       = ( 5, 3 )
+DIGIT_LAYOUT_DELTA       = ( 2, 3 )
 
 # see for further languange codes: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/a9eac961-e77d-41a6-90a5-ce1a8b0cdb9c?redirectedfrom=MSDN
 LANGUANGE_CODE = "de-DE"

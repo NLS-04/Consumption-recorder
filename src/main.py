@@ -19,41 +19,50 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 # keystrokes access without input(...)
 import msvcrt
 
-import win32gui
-import win32con
 import os
+import sys
 import locale
 import webbrowser
 
 # Custom packages
 from dbHandler import DBSession
 from constants import *
+from gui import Console, Key
 
 
   #:########:#
  #: TODO's :#
 #:########:#
 
-#// TODO manipulate_person:   moving_out date must be blank or greater than moving_in date
-#// TODO visualize_person:    person with moving_in date in the future and no moving_out date has negative amount of occupancy months
-#// TODO visaulize_reading:   add table of monthly and yearly averages and add it to the pdf output
-#// TODO visaulize_reading:   add better key input with arrow cursur moving
-#// TODO visualize_readding:  fix broken curser input for get_general
+##########################################
+# template to mark "debug-lines" in code
+# TODO: UNDO AFTER TESTING
+##########################################
 
-#// TODO visaulize_reading:   installing a new meter causes negative extrapolation of the data
-#// TODO export_to_pdf:       put the readings conclusion on a new line to (avoid bad page-breaks) improve readability
-#// TODO export_pdf:          open file in browser or explorer after generating
-#// TODO: ...                 add icon to project
-#// TODO: main.py:            add icon and title to terminal window
-#// TODO: .spec               add icon to .exe
-#// TODO: ...                 add CHANGELOG.md for automated releases
-# TODO .spec                add version-resource-file to .spec
-# TODO analyse:             add functionality to analyse timespans
-# TODO analyse:             add functionality to export anlysed timespan to pdf
-# TODO visaulize_reading:   add predicitons for the upcoming invoice's compensation payment
-# TODO do_invoice:          complete invoice
-# TODO ...:                 add descriptions to all menu/interaction pages
-# TODO ...:                 de-hard-code main.py by making printed str's to constant variables and move them to constants.py
+#// TODO manipulate_person:       moving_out date must be blank or greater than moving_in date
+#// TODO visualize_person:        person with moving_in date in the future and no moving_out date has negative amount of occupancy months
+#// TODO visaulize_reading:       add table of monthly and yearly averages and add it to the pdf output
+#// TODO visaulize_reading:       add better key input with arrow cursur moving
+#// TODO visualize_readding:      fix broken curser input for get_general
+
+#// TODO visaulize_reading:       installing a new meter causes negative extrapolation of the data
+#// TODO export_to_pdf:           put the readings conclusion on a new line to (avoid bad page-breaks) improve readability
+#// TODO export_pdf:              open file in browser or explorer after generating
+#// TODO: ...                     add icon to project
+#// TODO: main.py:                add icon and title to terminal window
+#// TODO: .spec                   add icon to .exe
+#// TODO: ...                     add CHANGELOG.md for automated releases
+# TODO console interaction:     [preliminary] refined interaction and appearance
+# TODO console interaction:     [preliminary] added adaptive autoscaling
+# TODO console interaction:     [preliminary] toggle setting for: adaptive autoscaling
+# TODO .spec                    add version-resource-file to .spec
+# TODO analyse:                 add functionality to analyse timespans
+# TODO analyse:                 add functionality to export anlysed timespan to pdf
+# TODO visaulize_reading:       add predicitons for the upcoming invoice's compensation payment
+# TODO do_invoice:              complete invoice
+# TODO ...:                     add descriptions to all menu/interaction pages
+# TODO ...:                     de-hard-code main.py by making printed str's to constant variables and move them to constants.py
+# TODO set_clean_window_size:   refine minimum cols, lines values
 
 
 SESSION = DBSession()
@@ -67,74 +76,153 @@ locale.setlocale( locale.LC_ALL, LANGUANGE_CODE )
   ######
  # UI #
 ######
-def cls():
-    os.system("cls")
 
-
-def flush_menu():
-    cls()
-    print( TITLE )
+def flush_menu() -> None:
+    Console.clear()
+    Console.writeLine( TITLE )
     
-    print( "Eine Option mit den Tasten 1-9 auswählen" )
+    Console.writeLine( "Eine Option mit den Tasten 1-9 auswählen" )
     print_menu_options()
-    print( "Um das Programm zu verlassen: Ctrl+C drücken", NL )
+    Console.writeLine( "Um das Programm zu verlassen: Ctrl+C drücken", NL )
 
-def print_menu_options():
+def print_menu_options() -> None:
     tab = tabulate( MENUS, tablefmt="simple", disable_numparse=True, colalign=('right', 'left') )
     
-    print( NL, indent( tab, '\t' ), NL, sep='' )
+    Console.writeLine( NL, indent( tab, '\t' ), NL, sep='' )
 
 
-def user_decline_prompt():
-    print( " --- Handlung wurde abgebrochen" )
+def user_decline_prompt() -> None:
+    Console.writeLine( " --- Handlung wurde abgebrochen" )
 
-def user_to_menu_prompt():
+def user_to_menu_prompt() -> None:
     input( " --- Eingabe-Taste drücken um in das Menü zurückzukehren" )
 
-# !!! will freeze with wait_for_change=True when executing with VSCode, requires external terminal window
-def set_window_title( window_title_string, wait_for_change=False ) -> None:
-    os.system("title " + window_title_string)
+# !!! will freeze when executing with VSCode, requires external terminal window
+# def setup_window() -> None:
+#     """Set the window title, wait for it to apply, then adjust the icon."""
+#     global CONSOLE_HWND, SCREEN_BUFFER
+#     win32console.SetConsoleTitle( APP_NAME )
     
-    if (not wait_for_change):
-        return
+#     CONSOLE_HWND = 0
+#     while (not CONSOLE_HWND):
+#         CONSOLE_HWND = win32gui.FindWindow(None, APP_NAME)
+#         sleep(0.025) # To not flood it too much...
     
-    matched_window = 0
-    while (not matched_window):
-        matched_window = win32gui.FindWindow(None, window_title_string)
-        sleep(0.025) # To not flood it too much...
-
-def set_window_icon( window_title, image_path ):
-    hwnd  = win32gui.FindWindow(None, window_title)
-    hicon = win32gui.LoadImage(None, image_path, win32con.IMAGE_ICON, 0, 0, win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE)
+#     # setting icon
+#     hicon = win32gui.LoadImage(None, PATH_ICON.as_posix(), win32con.IMAGE_ICON, 0, 0, win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE)
     
-    win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_SMALL, hicon)
-    win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_BIG, hicon)
+#     win32gui.SendMessage(CONSOLE_HWND, win32con.WM_SETICON, win32con.ICON_SMALL, hicon)
+#     win32gui.SendMessage(CONSOLE_HWND, win32con.WM_SETICON, win32con.ICON_BIG, hicon)
+    
+#     SCREEN_BUFFER = win32console.GetStdHandle( win32console.STD_OUTPUT_HANDLE )
 
-def set_title_and_icon(window_title, icon_path):
-    """Set the window title, wait for it to apply, then adjust the icon."""
-    window_title = set_window_title(window_title, wait_for_change=True)
-    set_window_icon(window_title, icon_path)
-    return window_title
+# def set_clean_window_size( size:tuple[int, int], minSize:tuple[int, int] = (-1, -1), forced:bool=False ) -> None:
+#     """
+#     Set the size of the terminal if SIZE_DO_SET flag is set or forced is true. None as coordinate evals to same value as current coordinates size.
+    
+#     ! Be aware that after resizing the output buffer got emptied !
+#     """
+    
+#     if not (forced or SIZE_DO_SET):
+#         return
+    
+#     maxSize = getMaxConsoleSize()
+    
+    
+#     if size[0] == SIZE_AUTO:
+#         pass
+    
+#     if size[1] == SIZE_AUTO:
+#         pass
+    
+    
+#     # clamp values: max(0, minSize) < size < maxSize 
+#     cols  = min( max( 0, minSize[0] ), max(size[0], maxSize[0]) )
+#     lines = min( max( 0, minSize[1] ), max(size[1], maxSize[1]) )
+    
+#     os.system(f'mode con: cols={ cols } lines={ lines }') # refine with win32 modules
+    
+#     # readjust screenbuffer so none of the print are getting left out
+#     try:
+#         SCREEN_BUFFER.SetConsoleScreenBufferSize( win32console.PyCOORDType( cols, SIZE_SCREEN_BUFFER ) )
+#     except win32console.error as e:
+#         # we expect the error (87, 'SetConsoleScreenBufferSize', ...)
+#         # reraise the error if this was not the expected error
+#         if e.winerror!= 87: 
+#             raise e
+    
+
+# def getConsoleSize() -> tuple[int, int]:
+#     """
+#     Returns:
+#         (width, height): width and height of the console if unsuccessful defaults to (-1, -1)
+#     """
+#     info: dict = SCREEN_BUFFER.GetConsoleScreenBufferInfo()
+#     size: win32console.PyCOORDType = info.get( 'Size', win32console.PyCOORDType(-1, -1) )
+#     return ( size.X, size.Y )
+
+# def getWindowRect() -> tuple[int, int, int, int]:
+#     """
+#     Returns:
+#         (left, top, right, bottom): left, top, right, bottom coordinates of the console window if unsuccessful defaults to (-1, -1, -1, -1)
+#     """
+#     return win32gui.GetWindowRect( CONSOLE_HWND )
+
+# def getMaxWindowSize() -> tuple[int, int]:
+#     """
+#     calculates maximum window size in screen coordinate (Pixels) based on the current left-top position of the console window and the available screen space the window is currently limited by
+    
+#     Returns:
+#         (width_px, height_px): width and height in pixels of the maximum console window size if unsuccessful defaults to (-1, -1)
+#     """
+#     monitor_hwnd = win32api.MonitorFromWindow(CONSOLE_HWND, win32con.MONITOR_DEFAULTTONEAREST)
+    
+#     info: dict = win32api.GetMonitorInfo( monitor_hwnd )
+    
+#     screen: tuple[int, int, int, int] = info.get('Work', None)
+#     window = getWindowRect()
+    
+#     return ( screen[2] - window[0], screen[3] - window[1] )
+
+# def getMaxConsoleSize() -> tuple[int, int]:
+#     """
+#     calculates maximum console size in characters based on the current left-top position of the console window and the available screen space the window is currently limited by
+    
+#     Returns:
+#         (width_px, height_px): width and height in pixels of the maximum console window size if unsuccessful defaults to (-1, -1)
+#     """
+#     size = getMaxWindowSize()
+#     fontSize = SCREEN_BUFFER.GetConsoleFontSize( SCREEN_BUFFER.GetCurrentConsoleFont(False)[0] )
+    
+#     return ( round(SIZE_SCALE_FACTOR * size[0]/fontSize.X), round(SIZE_SCALE_FACTOR * size[1]/fontSize.Y) )
+
+# not correct at the moment
+# def is_maximized() -> bool:
+#     maxsize = SCREEN_BUFFER.GetLargestConsoleWindowSize()
+    
+#     size = getConsoleSize()
+#     return size[0] == maxsize.X and size[1] == maxsize.Y
 
 
-def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur_char_data:str='_', cursur_char_placeholder:str=' ' ) -> int:
+def await_user_key_codes( console_out_function, data:str, cursur_ptr:int, cursur_char_data:str='_', cursur_char_placeholder:str=' ' ) -> Key:
     period = 0.5
     time_next_flip = -1
     cursur_on = False
     current_data = data
     
-    while not msvcrt.kbhit():
-        if time() >= time_next_flip:
-            time_next_flip = time() + period
+    # TODO await_user_key_codes: implement with new Console 
+    # while not msvcrt.kbhit():
+    #     if time() >= time_next_flip:
+    #         time_next_flip = time() + period
             
-            # cursur = not cursur; if cursur: ...
-            if cursur_on := not cursur_on:
-                current_data = data[:cursur_ptr] + (cursur_char_placeholder if data[min(max(0, cursur_ptr), len(data)-1)] == PLACE_HOLDER else cursur_char_data) + data[cursur_ptr+1:]
-            else:
-                current_data = data
-        print( console_out_function( current_data ), end='\r' )
+    #         # cursur = not cursur; if cursur: ...
+    #         if cursur_on := not cursur_on:
+    #             current_data = data[:cursur_ptr] + (cursur_char_placeholder if data[min(max(0, cursur_ptr), len(data)-1)] == PLACE_HOLDER else cursur_char_data) + data[cursur_ptr+1:]
+    #         else:
+    #             current_data = data
+    #     print( console_out_function( current_data ), end='\r' )
         
-    return ord(msvcrt.getwch())
+    return Console.get_key()
 
 
 def get_date( prefillDateISO:str=date.today().strftime("%d%m%Y"), validRequired:bool=True, prompt_name:str="Datum:", date_predicat=lambda d: True ) -> date or None:
@@ -309,6 +397,11 @@ def visualize_persons():
     
     table = get_tabular_person_detail( data )
     
+    cols  = maxWidthOfStrings( table.splitlines() )
+    lines = 2 + len(table.splitlines()) + 2
+    
+    set_clean_window_size( cols, lines )
+    
     print( table, NL )
 
 
@@ -467,7 +560,7 @@ def delete_reading():
     
         SESSION.remove_readings( d_from, d_till )
         
-        print( NL, "Einträge aus der Datenbank entfernt", sep='' )
+        print( NL, "Einträge aus der Datenbank entfernt", NL, sep='' )
 
 def delete_person():
     print( " --- PERSON ENTFERNEN --- ", NL )
@@ -611,6 +704,13 @@ def print_all_names( tablefmt="grid" ):
     
     print( table, NL )
 
+
+def maxWidthOfStrings( list_of_str:list[str] ) -> int:
+    res = -1
+    try:
+        res = len( max( list_of_str, key=lambda x: len(x) ) )
+    finally:
+        return res
 
 def format_decimal( value:float, digit_layout:tuple[int, int], alignement_format:str='>', format_size:int=None ) -> str:
     # to clamp the value to the specified digit_layout: abs_max = 10**digit_layout[0] - 10**(-digit_layout[1])
@@ -869,7 +969,7 @@ def add_info_pdf_page( canv:canvas.Canvas ) -> None:
     canv.setFont( f, fs, lead )
 
 def draw_pdf_page( table_lines:str, can:canvas.Canvas, width:int, height:int, rx:int, ry:int, offset_ry:int, font:str, table_continue_str:str ) -> None:
-    max_row_len = len( max( table_lines.splitlines(), key=lambda x: len(x) ) )
+    max_row_len = maxWidthOfStrings( table_lines.splitlines() )
     
     RW, RH = width-2*rx, height-(ry+offset_ry)-rx
     
@@ -1227,7 +1327,7 @@ MENU_OPTIONS = [
 def loop():
     flush_menu()
     
-    option:str = input("Action auswählen: ").strip().lower()
+    option:str = input("Action auswählen: ").strip().lower() # TODO refine with Console
     
     if not option.isdigit():
         return
@@ -1237,26 +1337,28 @@ def loop():
     if not ( 0 <= option < len(MENU_OPTIONS) ):
         return
     
-    cls()
+    Console.clear()
+    
+    set_clean_window_size( *SIZES[option] )
     
     MENU_OPTIONS[option]()
     
     user_to_menu_prompt()
 
 def main() -> None:
-    os.system("@echo off")
-    set_title_and_icon(APP_NAME, PATH_ICON.as_posix())
-    cls()
+    setup_window()
+    
+    Console.clear()
         
     try:
         while True:
             loop()
     except KeyboardInterrupt as e:
-        cls()
-        print( TITLE )
-        print( " Erfolgreich geschlossen ", NL )
+        Console.clear()
+        Console.writeLine( TITLE )
+        Console.writeLine( " Erfolgreich geschlossen ", NL )
     finally:
-        os.system("@echo on")
+        Console.stop()
 
 
 if __name__ == '__main__':

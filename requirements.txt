@@ -1,10 +1,17 @@
 altgraph==0.17.3
+ansicon==1.89.0
+console==0.9907
+ezenv==0.92
+jinxed==1.2.0
+keyboard==0.13.5
 pefile==2023.2.7
 Pillow==9.4.0
 platformdirs==3.2.0
 pyinstaller==5.13.1
 pyinstaller-hooks-contrib==2023.1
+pynput==1.7.6
 pywin32==306
 pywin32-ctypes==0.2.2
 reportlab==3.6.12
+six==1.16.0
 tabulate==0.9.0
