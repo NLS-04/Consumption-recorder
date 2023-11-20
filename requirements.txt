@@ -1,4 +1,10 @@
 altgraph==0.17.3
+ansicon==1.89.0
+console==0.9907
+ezenv==0.92
+future-fstrings==1.2.0
+jinxed==1.2.0
+keyboard==0.13.5
 pefile==2023.2.7
 Pillow==9.4.0
 platformdirs==3.2.0

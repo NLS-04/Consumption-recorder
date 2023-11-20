@@ -1,6 +1,32 @@
+from pathlib import Path
+
+  ####################
+ # RUNTIME DEPENDED #
+####################
+### PATH-ING ###
+PATH_ROOT = Path(__file__).parent
+
+# Path to VERSION when executing .exe
+PATH_VERSION = PATH_ROOT.joinpath("VERSION")
+if not PATH_VERSION.exists():
+    # Path to VERSION when executing .py
+    PATH_VERSION = PATH_ROOT.parent.joinpath("VERSION")
+
+# Path to ICON file when executing .exe
+PATH_ICON = PATH_ROOT.joinpath("rsc").joinpath("main.ico")
+if not PATH_ICON.exists():
+    # Path to ICON file when executing .py
+    PATH_ICON = PATH_ROOT.parent.joinpath("rsc").joinpath("main.ico")
+
+
+  ############################################
+ # SETTABLE CONSTANTS | RUNTIME INDEPENDENT #
+############################################
+
 APP_NAME   = "Consumption recorder"
-APP_AUTHOR = "github NLS-04" 
-VERSION    = '3.1'
+APP_AUTHOR = "github NLS-04"
+VERSION    = ( f := PATH_VERSION.open(), f.readline()[0:-1], f.close() )[1]
+
 
 TITLE =\
 rf"""
@@ -34,60 +60,54 @@ MENUS = [
     SEPARATING_LINE,
     # [ "7)", "Jahresabrechnung erstellen" ],
     [ "7)", "INOP - (Jahresabrechnung erstellen)" ],
-    [ "8)", "Protokoll exportieren - PDF" ],
+    [ "8)", "Analyse - manuell" ],
+    [ "9)", "Protokoll exportieren - PDF" ],
 ]
 
 KEYBOARD_SLEEP_TIME = 0.5
 
-# Digitscount (prePoint, postPoint)
-DIGIT_LAYOUT_ELECTRICITY = (6,1)
-DIGIT_LAYOUT_GAS         = (5,3)
-DIGIT_LAYOUT_WATER       = (5,3)
-DIGIT_LAYOUT_DELTA       = (2,3)
+# Digits-count (prePoint, postPoint)
+DIGIT_LAYOUT_ELECTRICITY = ( 6, 1 )
+DIGIT_LAYOUT_GAS         = ( 5, 3 )
+DIGIT_LAYOUT_WATER       = ( 5, 3 )
+DIGIT_LAYOUT_DELTA       = ( 2, 3 )
 
-DATE_STR_FORMAT = "%d.%m.%Y"
-PLACE_HOLDER = '_'
+# see for further language codes: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/a9eac961-e77d-41a6-90a5-ce1a8b0cdb9c?redirectedfrom=MSDN
+LANGUANGE_CODE = "de-DE"
+
+# DATE_STR_FORMAT = "%d.%m.%Y"
+DATE_STR_FORMAT = "%x"
+PLACE_HOLDER    = '_'
 
 NAME_ELECTRICITY = "Strom"
 NAME_GAS         = "Gas"
 NAME_WATER       = "Wasser"
 
-LIST_READING_OBJ_NAMES = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
-LIST_DIGIT_OBJ_LAYOUTS = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
+LIST_READING_OBJ_NAMES: list[str]             = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
+LIST_DIGIT_OBJ_LAYOUTS: list[tuple[int, int]] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
 
 TABLE_HEADER_READINGS_SIMPLE = [ "Datum", NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
-TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugs-\ndatum", "Auszugs-\ndatum"]
+TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugsdatum", "Auszugsdatum"]
 
-__TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche"
+# cspell:ignore Eintr Abls
+__TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche\nStandardabweichung p.Tag"
 __TABLE_H_R_D_FORMAT = "{:^17s}\nDelta/Tag   Delta"
 TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", *[ __TABLE_H_R_D_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
-TABLE_HEADER_READINGS_MONTHS = [ "Monat\nAnz. Eintr.   Zeitspanne", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
-TABLE_HEADER_PERSONS_DETAIL  = [ "Name", "Einzugs-\ndatum", "Auszugs-\ndatum", "Bewohnte-\nmonate", "Voraussichtliche\nAbrechungen" ]
+TABLE_HEADER_READINGS_STATS  = [ "Jahr : Monat\nZeitspanne   Anz. Eintr.\nAblesungen\nTage zw. Abls.|std. Abw.", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
+TABLE_HEADER_PERSONS_DETAIL  = [ "Name", "Einzugsdatum", "Auszugsdatum", "Bewohnte Monate", "Voraussichtliche\nAbrechnungen" ]
+
+COUNT_READING_OBJS = len( LIST_READING_OBJ_NAMES )
+COUNT_DIGIT_OBJS   = len( LIST_DIGIT_OBJ_LAYOUTS)
 
 PDF_FONT_TABLE = "Courier"
 PDF_FONT_TITLE = "Courier-Bold"
 PDF_FONTSIZE_NOTES = 7
 
+SIZE_TAB  = 4
+SIZE_NAME = 32
+SIZE_DATE = 10
+
 NL = '\n'
-
-
-# ord keycodes for msvcrt getch/getwch user console input
-KEY_BACKSPACE = 8
-KEY_TAB       = 9
-KEY_ESC       = 27
-KEY_ENTER     = 13
-KEY_SPACE     = 32
-
-KEY_CTRL_BACKSPACE = 127
-KEY_CTRL_C    = 3
-
-# special keys consists of two getch or getwch with the first one being 224
-KEY_SPECIAL = 224
-KEY_LEFT    = 75
-KEY_UP      = 72
-KEY_RIGHT   = 77
-KEY_DOWN    = 80
-
 
 if __name__ == "__main__":
     print( *TABLE_HEADER_READINGS_DETAIL, sep=2*NL )

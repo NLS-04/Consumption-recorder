@@ -50,14 +50,20 @@ class DBSession():
         with self as con:
             con.execute( """ DELETE FROM persons WHERE nameID=? AND ? """, (person_name, additional_condition if additional_condition else True) )
     
-    
-    def get_reading_all(self) -> list[tuple[datetime.date, float, float, float]]:
+    # todo: add better typing support
+    def get_reading_all(self) -> list[ tuple[object, ...] ]:
         with self as con:
             return con.execute( """ SELECT * FROM readings ORDER BY date """ ).fetchall()
-        
-    def get_reading_where(self, where:str) -> list[tuple[datetime.date, float, float, float]]:
+    
+    # todo: add better typing support
+    def get_reading_where(self, where:str) -> list[ tuple[object, ...] ]:
+        #! VERY DANGEROUS, BUT MEH
         with self as con:
             return con.execute( f""" SELECT * FROM readings WHERE {where} ORDER BY date """ ).fetchall()
+    
+    # todo: add better typing support
+    def get_reading_between(self, date_low_bound:datetime.date, date_up_bound:datetime.date) -> list[ tuple[object, ...] ]:
+        return self.get_reading_where( "date BETWEEN '%s' AND '%s'" % (str(date_low_bound), str(date_up_bound)) )
     
     
     def get_person_all(self) -> list[tuple[str, datetime.date, datetime.date]]:
@@ -68,15 +74,18 @@ class DBSession():
         with self as con:
             return con.execute( f""" SELECT * FROM persons WHERE {where} ORDER BY move_in """ ).fetchall()
     
-    
-    def exists_readings(self, date_low_bound:datetime.date, date_up_bound:datetime.date, additional_condition:str=None) -> tuple[ bool, list[ tuple[datetime.date, float, float, float] ] ]:
+    # todo: add better typing support
+    def exists_readings(self, date_low_bound:datetime.date, date_up_bound:datetime.date, additional_condition:str=None) -> tuple[ bool, list[ tuple[object, ...] ] ]:
         entry = self.get_reading_where( "date BETWEEN '%s' AND '%s' AND %s" % (str(date_low_bound), str(date_up_bound), additional_condition if additional_condition else 'TRUE'))
         return bool(entry), entry if bool(entry) else None
     
-    def exists_person(self, nameID:str, additional_condition:str=None) -> tuple[ bool, list[ tuple[str, datetime.date, datetime.date] ] ]:
+    def exists_person(self, nameID:str, additional_condition:str=None) -> tuple[ bool, list[tuple[str, datetime.date, datetime.date]] ]:
         entry = self.get_person_where( "nameID = '%s' AND %s" % ( nameID, additional_condition if additional_condition else 'TRUE') )
-        return bool(entry), entry[0] if bool(entry) else None
+        return bool(entry), entry if bool(entry) else None
     
+    @staticmethod
+    def format_data( data:list[tuple[datetime.date, ...]] ) -> list[ tuple[ datetime.date, list[ float ] ] ]:
+        return [ (datee, values) for datee, *values in data ]
     
     def ping(self) -> tuple[str, bool]:
         try:
@@ -84,7 +93,7 @@ class DBSession():
         except BaseException as e:
             return e, False
         finally:
-            return "Succesful connection", True        
+            return "Successful connection", True
         
 
     def __enter__(self):
@@ -96,8 +105,8 @@ class DBSession():
 
 
 def fill_dummy_readings( amount:int = 50 ):
-    START_VALUE  = ( 14867.2, 1123.158, 38.511 )
-    STADY_CHANGE = ( 20.0, 1.5, 1.0 )
+    START_VALUE   = ( 14867.2, 1123.158, 38.511 )
+    STEADY_CHANGE = ( 20.0, 1.5, 1.0 )
     VARIANCE = 5.0
     
     TIMEDELTA = datetime.timedelta(7)
@@ -111,13 +120,13 @@ def fill_dummy_readings( amount:int = 50 ):
     for i in range(amount):
         SESSION.add_reading(
             DATE+i*TIMEDELTA,
-            round( START_VALUE[0]+i*STADY_CHANGE[0]+rand(), 1),
-            round( START_VALUE[1]+i*STADY_CHANGE[1]+rand(), 3),
-            round( START_VALUE[2]+i*STADY_CHANGE[2]+rand(), 3)
+            round( START_VALUE[0]+i*STEADY_CHANGE[0]+rand(), 1),
+            round( START_VALUE[1]+i*STEADY_CHANGE[1]+rand(), 3),
+            round( START_VALUE[2]+i*STEADY_CHANGE[2]+rand(), 3)
         )
     
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     s = DBSession()
     
     s.add_reading( datetime.date.today(), 1.0, 2.0, 0.0 )
