@@ -23,23 +23,24 @@ jobs:
       with:
           python-version: '3.11'
           architecture: 'x64'
+
+    - name: Set Version
+      uses: jannekem/run-python-script-action@v1.6
+      with:
+          script: |
+            with open( 'VERSION', 'w' ) as f:
+                f.write( '${{ github.ref_name }}\n'[1:] )
     
     - name: Install requirements
       run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-    
-    - name: Set VERSION
-      run: |
-        python3.11
-        with open( 'VERSION', 'w' ) as f:
-            s = '${{ github.ref_name }}\n'
-            f.write( s.removeprefix('v') )
-        exit()
 
+    
     - name: Run Build
       run: |
         python -m PyInstaller main_file_win.spec -y --clean
+
     
     - name: Create Release
       id: create_release
