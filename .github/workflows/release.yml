@@ -35,7 +35,7 @@ jobs:
         echo -e '${{ steps.version-number.outputs._1 }}\n' > VERSION
 
     - name: Package & Build Application
-      uses: JackMcKew/pyinstaller-action-windows@python3-10-pyinstaller-5-3
+      uses: JackMcKew/pyinstaller-action-windows@main
       with:
         path: .
         spec: ${{ matrix.specs }}
