@@ -31,8 +31,8 @@ jobs:
     
     - name: Set VERSION
       run: |
-        py
-        with open( 'VERSION', 'w' ) as f:;
+        python3.11
+        with open( 'VERSION', 'w' ) as f:
             f.write( '${{ github.ref_name }}\n'[1:] )
         exit()
 
