@@ -11,7 +11,7 @@ from textwrap import fill
 import logging
 import inspect
 
-from pynput import keyboard
+import pynput.keyboard as keyboard
 
 from constants import *
 from dbHandler import DBSession

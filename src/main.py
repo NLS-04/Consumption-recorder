@@ -21,12 +21,13 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 import locale
 import webbrowser
 
-from pynput import keyboard
+import pynput.keyboard as keyboard
 
 # Custom packages
-from dbHandler import DBSession, PATH_ROOT
+from dbHandler import DBSession
 from constants import *
 from gui import Console, Key
+
 from Focus_Frame import Result, Register, TX_func_factory
 from Focus_Frame import Manager, Name, Date, Value, Plain_Text
 from Focus_Frame import Button_Manager, Button, Confirm_yes_no

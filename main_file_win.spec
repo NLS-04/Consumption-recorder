@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+# cspell:disable
 
 
 block_cipher = None

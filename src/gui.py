@@ -11,7 +11,7 @@ import console.detection
 import console.utils
 from console.screen import sc, Screen
 
-from pynput import keyboard
+import pynput.keyboard as keyboard
 
 
 # TODO Key: add ctrl+'alphabetic' since they are not nicely recognized
