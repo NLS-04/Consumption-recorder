@@ -29,27 +29,16 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
     
-    - name: Split Action
-      id: version-number
-      # You may pin to the exact commit or the version.
-      # uses: JungWinter/split@7f51d99e7cc1f147f6f99be75acf5e641930af88
-      uses: JungWinter/split@v2.1.0
-      with:
-        # String to split
-        msg: ${{ github.ref_name }}
-        # The delimiter to split the string
-        separator: v
-    
     - name: Set VERSION
       run: |
-        rm -f VERSION
-        echo -e '${{ steps.version-number.outputs._1 }}\n' > VERSION
+        py
+        with open( 'VERSION', 'w' ) as f:;
+            f.write( '${{ github.ref_name }}\n' )
+        exit()
 
     - name: Run Build
       run: |
-        cd dev
-        build_file.bat
-        cd ..
+        python -m PyInstaller main_file_win.spec -y --clean
     
     - name: Create Release
       id: create_release
