@@ -83,8 +83,8 @@ NAME_ELECTRICITY = "Strom"
 NAME_GAS         = "Gas"
 NAME_WATER       = "Wasser"
 
-LIST_READING_OBJ_NAMES: list[str]             = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
-LIST_DIGIT_OBJ_LAYOUTS: list[tuple[int, int]] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
+LIST_READING_ATTRIBUTE_NAMES: list[str]             = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
+LIST_DIGIT_OBJ_LAYOUTS      : list[tuple[int, int]] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
 
 TABLE_HEADER_READINGS_SIMPLE = [ "Datum", NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
 TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugsdatum", "Auszugsdatum"]
@@ -92,12 +92,12 @@ TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugsdatum", "Auszugsdatum"]
 # cspell:ignore Eintr Abls
 __TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche\nStandardabweichung p.Tag"
 __TABLE_H_R_D_FORMAT = "{:^17s}\nDelta/Tag   Delta"
-TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", *[ __TABLE_H_R_D_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
-TABLE_HEADER_READINGS_STATS  = [ "Jahr : Monat\nZeitspanne   Anz. Eintr.\nAblesungen\nTage zw. Abls.|std. Abw.", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_OBJ_NAMES ] ]
+TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", *[ __TABLE_H_R_D_FORMAT.format(obj) for obj in LIST_READING_ATTRIBUTE_NAMES ] ]
+TABLE_HEADER_READINGS_STATS  = [ "Jahr : Monat\nZeitspanne   Anz. Eintr.\nAblesungen\nTage zw. Abls.|std. Abw.", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_ATTRIBUTE_NAMES ] ]
 TABLE_HEADER_PERSONS_DETAIL  = [ "Name", "Einzugsdatum", "Auszugsdatum", "Bewohnte Monate", "Voraussichtliche\nAbrechnungen" ]
 
-COUNT_READING_OBJS = len( LIST_READING_OBJ_NAMES )
-COUNT_DIGIT_OBJS   = len( LIST_DIGIT_OBJ_LAYOUTS)
+COUNT_READING_ATTRIBUTES = len( LIST_READING_ATTRIBUTE_NAMES )
+COUNT_DIGIT_OBJS         = len( LIST_DIGIT_OBJ_LAYOUTS )
 
 PDF_FONT_TABLE = "Courier"
 PDF_FONT_TITLE = "Courier-Bold"

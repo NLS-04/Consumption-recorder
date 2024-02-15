@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, datetime
 from math import floor, sqrt
 from typing import Callable, Optional
@@ -24,7 +25,7 @@ import webbrowser
 import pynput.keyboard as keyboard
 
 # Custom packages
-from dbHandler import DBSession
+from dbHandler import DBSession, Reading, Person
 from constants import *
 from gui import Console, Key
 
@@ -43,18 +44,26 @@ from Focus_Frame import Button_Manager, Button, Confirm_yes_no
 #----------------------------------------------------------------------------------------------------------------------
 # main.py #
 #---------#
-# TODO manipulate_readings:  last line of first FM disappears iff any data exists, as for now only happens to `manipulate_readings`
-# TODO visualize_reading:    add predictions for the upcoming invoice's compensation payment
-# TODO do_invoice:           complete invoice
-# TODO manage_interactables: maybe take this out of this function and let the user choose their own Confirm Frame
-# TODO ...:                  add descriptions to all menu/interaction pages
-# TODO ...:                  de-hard-code main.py by making Console.write_line str's to constant variables and move them to constants.py
-# TODO .spec                 add version-resource-file to .spec
+#! TODO TABULATE - READINGS:         overhauled logical structure to improve readability and maintainability
+#! TODO manipulate_readings:         last line of first FM disappears iff any data exists, as for now only happens to `manipulate_readings`
+#!// TODO get_tabular_reading_detail:  blank reading values are not printed and all other reading values to the right of the blank one are shifted to the left
+#! TODO visualize_reading:           add pyplot plots of consumption rates over time
+#! TODO export_to_pdf:               add pyplot plots of consumption rates over time
+#! TODO ...:                         auto-loading values for edit don't load when first entering Frame Manager, only after making an input do all interactables update
+#! TODO logging:                     put logs folder at the location of the database.
+
+# TODO ...:                         refactor all commends/docs: reading values like gas or water are to be called reading-attributes
+# TODO visualize_reading:           add predictions for the upcoming invoice's compensation payment
+# TODO do_invoice:                  complete invoice
+# TODO manage_interactables:        ? maybe take this out of this function and let the user choose their own Confirm Frame
+# TODO ...:                         add better descriptions to all menu/interaction pages
+# TODO ...:                         de-hard-code main.py by making Console.write_line str's to constant variables and move them to constants.py
+# TODO .spec                        add version-resource-file to .spec
 
 #--------#
 # gui.py #
 #--------#
-# TODO Console: add option to suppress ctrl-c inputs or to raise an KeyboardInterrupt Exception if not suppressed and pressed
+#! TODO Console: add option to suppress ctrl-c inputs or to raise an KeyboardInterrupt Exception if not suppressed and pressed
 # TODO Key:     integrate pynput.keyboard into Key class
 # TODO Console: expect ANSI codes to not work properly, assume that it needs refinement in the future when adding fancy ESC styling
 # TODO Console: add icon to terminal window
@@ -62,8 +71,9 @@ from Focus_Frame import Button_Manager, Button, Confirm_yes_no
 #------#
 # MISC #
 #------#
+#! TODO main.py      separate code chunks into own specified files
 # TODO logging:      refactor logging for all files
-# todo dbHandler.py: add better typing support
+#// TODO dbHandler.py: add better typing support
 
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -123,7 +133,7 @@ def visualize_readings():
     Console.write_line( " --- ABLESUNGEN AUSGEBEN --- ", NL )
     #todo: better description
     
-    Console.write_line( gather_readings_output( SESSION.get_reading_all() ) )
+    Console.write_line( generate_printout_readings_all( SESSION.get_reading_all() ) )
 
 def visualize_persons():
     Console.write_line( " --- PERSONEN AUSGEBEN --- ", NL )
@@ -144,8 +154,8 @@ def manipulate_readings():
     # appending the date focus
     FM.append( Date( "Datum", preset_dates=get_all_reading_dates() ) )
     
-    for i in range(COUNT_READING_OBJS):
-        FM.append( Value( LIST_READING_OBJ_NAMES[i], True, None, LIST_DIGIT_OBJ_LAYOUTS[i] ) )
+    for i in range(COUNT_READING_ATTRIBUTES):
+        FM.append( Value( LIST_READING_ATTRIBUTE_NAMES[i], True, None, LIST_DIGIT_OBJ_LAYOUTS[i] ) )
         FM.append_rule( 0, i+1, TX_func_factory.date_2_value(SESSION, i) )
     
     manage_interactables(
@@ -288,9 +298,9 @@ def do_analyze():
     
     data = SESSION.get_reading_between( date_low, date_high )
     
-    Console.write( gather_readings_output( data, False) )
+    Console.write( generate_printout_readings_all( data, False) )
     
-    if create_pdf and create_pdf.popitem()[1]:
+    if create_pdf.success and create_pdf.data[0]:
         export_to_pdf( data_readings=data, use_years_for_reading_stats=False, name="export_span_%s_%s.pdf" % (date_low.strftime("%Y%m%d"), date_high.strftime("%Y%m%d")) )
         return
     
@@ -341,14 +351,14 @@ def export_to_pdf(
     c.setFont( PDF_FONT_TABLE, 16 )
     c.drawString( RX, 120, "Ablesungen:" )
     
-    table_readings = get_tabular_reading_detail( data_readings )
+    table_readings = generate_printout_readings_detail( data_readings )
     draw_pdf_page( table_readings, c, WIDTH, HEIGHT, RX, RY, 80, PDF_FONT_TABLE, TABLE_CONTINUE_STR )
     
     # statistics readings
     c.setFont( PDF_FONT_TABLE, 16 )
     c.drawString( RX, RY-20, "Statistiken:" )
     
-    table_months = get_tabular_reading_stats( data_readings, use_years_for_reading_stats )
+    table_months = generate_printout_readings_statistics( data_readings, use_years_for_reading_stats )
     draw_pdf_page( table_months, c, WIDTH, HEIGHT, RX, RY, 0, PDF_FONT_TABLE, TABLE_CONTINUE_STR )
 
      
@@ -599,7 +609,7 @@ def get_string_dimensions( s:str ) -> tuple[int, int]:
     """
     get the width and height (col, line) dimensions of the supplied string it would span on the terminal
 
-    >>> get_string_dimensions( "aaa\\nbbb\\nccc\\nddd" )
+    >>> get_string_dimensions( "aa\\nb\\nccc\\ndd" )
     (3, 4)
 
     Args:
@@ -613,13 +623,16 @@ def get_string_dimensions( s:str ) -> tuple[int, int]:
 
 def max_width_of_strings( list_of_str:list[str] ) -> tuple[str, int]:
     """
-    return the most wide width of the following lines
+    find the line and the associated width of the widest line
 
     Args:
         list_of_str (`list`[`str`]): lines of string
 
     Returns:
-        `tuple`[`str`, `int`]: [0] is the line/element with the widest width, [1] is the length of [0]
+        `tuple`[`str`, `int`]:
+        - [0] is the line/element with the widest width
+        - [1] is the length of [0]; Will return (None, -1)
+        - iff unable to `list_of_strings` is not of type `list[str]` or other errors occur during calculation
     """
     try:
         res = max( list_of_str, key=len )
@@ -628,7 +641,7 @@ def max_width_of_strings( list_of_str:list[str] ) -> tuple[str, int]:
         pass
     return None, -1
 
-def format_decimal( value:float, digit_layout:tuple[int, int], alignment_format:str='>', format_size:int=None ) -> str:
+def format_decimal( value:float|None, digit_layout:tuple[int, int], alignment_format:str='>', format_size:int=None ) -> str:
     # to clamp the value to the specified digit_layout: abs_max = 10**digit_layout[0] - 10**(-digit_layout[1])
     # 
     # example:
@@ -638,8 +651,6 @@ def format_decimal( value:float, digit_layout:tuple[int, int], alignment_format:
     # sum(digit_layout)  + 1     + 1
     #       ^^^^          ^       ^^
     # number of digits,  '.', '-' or ' '
-    
-    
     if not value:
         return ' ' * sum(digit_layout)
     
@@ -651,11 +662,11 @@ def format_decimal( value:float, digit_layout:tuple[int, int], alignment_format:
     
     return ( "{:%s%ds}" % ( alignment_format, format_size ) ).format( formatted_digits )
 
-def format_person_data( name:str, move_in:date, move_out:date ) -> tuple[str, str, str]:
+def format_person_data( person:Person ) -> tuple[str, str, str]:
     return (
-        name,
-        move_in.strftime( DATE_STR_FORMAT ) if move_in else None,
-        move_out.strftime( DATE_STR_FORMAT ) if move_out else None,
+        person.name,
+        person.move_in.strftime( DATE_STR_FORMAT ) if person.move_in else None,
+        person.move_out.strftime( DATE_STR_FORMAT ) if person.move_out else None,
     )
 
 
@@ -739,66 +750,146 @@ def add_side_note_to_tabular( table:str, side_note:str, row:int ) -> str:
 # TABULATE - PERSONS #
 #--------------------#
 def get_all_names() -> list[str]:
+    """
+    fetches all individual names of persons in database
+
+    Returns:
+        `list[str]`: names of person in database
+    """
     data = SESSION.get_person_all()
     
-    return [ n for n, *_ in data ]
+    return [ p.name for p in data ]
 
 def get_tabular_names( names:list[str], tablefmt="grid" ) -> str:
-    # Console.write_line out all the names of the person in the database
+    """
+    generate simple `tabulate` table of names
+
+    Args:
+        names (`list[str]`): list of names to be tabulated
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "grid".
+
+    Returns:
+        `str`: string of table
+    """
     return tabulate( [[n] for n in names], headers=["Personen in der Datenbank"], tablefmt=tablefmt, colalign=['center'] )
 
-def get_tabular_person_simple( data:list[tuple[str, date, date]], tablefmt="psql" ) -> str:
-    data = [ format_person_data(*d) for d in data ]
+def get_tabular_person_simple( persons:list[ Person ], tablefmt="psql" ) -> str:
+    """
+    generate a simple `tabulate` Table of persons
+
+    ---
+    #### Table layout will be according to the following:
+    
+    Legend:
+    - `Highlighted`: highlighted literals define one chunk of e.g. a str or other information
+    - `$xyz$`: highlighted and encapsulated by `$` literals define input-variables to be inserted
+    
+    Header:
+    | name | date move in | date move out |
+    |-----:|:------------:|:-------------:|
+    | `Name` | `moving in date` | `moving out date` |
+    
+    Body ( Data ):
+    | name | date move in | date move out |
+    |-----:|:------------:|:-------------:|
+    | `$person_x.name$` | `$person_x.move_in$` | `$person_x.move_out$` |
+    
+    ---
+    Args:
+        persons (`list[ Person ]`): list of persons to be tabulated
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "psql".
+
+    Returns:
+        `str`: string of table
+    """
+    persons = [ format_person_data(p) for p in persons ]
     return tabulate(
-        data, 
+        persons, 
         headers=TABLE_HEADER_PERSONS_SIMPLE, 
         tablefmt=tablefmt, 
         colalign=('right', 'center', 'center'), 
         maxcolwidths=[15, None, None, None]
     )
 
-def get_tabular_person_detail( data:list[tuple[str, date, date]], tablefmt="grid" ) -> str:
+def get_tabular_person_detail( persons:list[ Person ], tablefmt="grid" ) -> str:
+    """
+    generate a detailed `tabulate` Table of persons
+
+    ---
+    #### Table layout will be according to the following:
+    
+    Legend:
+    - `Highlighted`: highlighted literals define one chunk of e.g. a str or other information
+    - `$xyz$`: highlighted and encapsulated by `$` literals define input-variables to be inserted
+    - ------- : Horizontal lines in a cell indicates that either the above or below layout can be used for formatting
+        
+        (This is dependent on internal conditions choosing one version for formatting)
+    
+    #### Header:
+    | name | date move in | date move out | inhabited months | included in invoices |
+    |:----:|:------------:|:-------------:|:----------------:|:--------------------:|
+    | `Name` | `moving in date` | `moving out date` | `inhabited months` | `included in` |
+    |        |                  |                   |                    |   `invoices`  |
+    
+    #### Body ( Data ):
+    | name | date move in | date move out | inhabited months | included in invoices |
+    |:----:|:------------:|:-------------:|:----------------:|:--------------------:|
+    | `$name$` |    `$move_in$`   |   `$move_out$`   |                `$PLACE_HOLDER$`                |        `$PLACE_HOLDER$`        |
+    |          | ---------------- | ---------------- | ---------------------------------------------  | ------------------------------ |
+    |          | `$PLACE_HOLDER$` | `$PLACE_HOLDER$` | `$month_less_half_prefix$` `$months_in_span$`  | `$invoices_vertically_listed$` |
+    |          | `$PLACE_HOLDER$` | `( $move_out$ )` | `$move_in.month_yr$` `-` `$move_out.month_yr$` | ------------------------------ |
+    |          |                  |                  | ---------------------------------------------- |      `( $move_in.year$ )`      |
+    |          |                  |                  |               `not yet moved in`               |                                |
+    
+    ---
+    Args:
+        persons (`list[ Person ]`): list of persons to be tabulated
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "psql".
+
+    Returns:
+        `str`: string of table
+    """
     PLACE_HOLDER = '*'
     
     table_data = []
     
-    for i, (n, din, dout) in enumerate( data ):
-        # setup default values
-        din_str  = din.strftime(  DATE_STR_FORMAT ) if din  else PLACE_HOLDER
-        dout_str = dout.strftime( DATE_STR_FORMAT ) if dout else PLACE_HOLDER
+    for p in persons:
+        move_in_str  = p.move_in.strftime(  DATE_STR_FORMAT ) if p.move_in  else PLACE_HOLDER
+        move_out_str = p.move_out.strftime( DATE_STR_FORMAT ) if p.move_out else PLACE_HOLDER
+        
         effective_months_str = PLACE_HOLDER
         invoices = PLACE_HOLDER
         
-        if din:
-            artifical_dout = dout if dout else date.today()
+        if p.move_in:
+            artifical_move_out = p.move_out if p.move_out else date.today()
             
-            years_str_list = [ str(year) for year in range(din.year, artifical_dout.year+1) ]
+            years_str_list = [ str(year) for year in range(p.move_in.year, artifical_move_out.year+1) ]
             
-            if artifical_dout >= din:
-                delta_months, delta_fraction = divmod( ( artifical_dout - din ).days, 30 )
+            if artifical_move_out >= p.move_in:
+                delta_months, delta_fraction = divmod( ( artifical_move_out - p.move_in ).days, 30 )
                 
                 delta_str = "%s%d" % ( '<' if delta_fraction < 15 else '', delta_months+1 )
                 
-                effective_months_str = ''.join( [delta_str, NL, din.strftime("%b%y"), ' - ', artifical_dout.strftime("%b%y") ] )
+                effective_months_str = ''.join( [delta_str, NL, p.move_in.strftime("%b%y"), ' - ', artifical_move_out.strftime("%b%y") ] )
             else:
                 effective_months_str = "noch nicht\neingezogen\n"
-                years_str_list = [ f"( {din.year} )" ]
+                years_str_list = [ f"( {p.move_in.year} )" ]
             
             invoices = NL.join( years_str_list )
             
             # hint today's date in the moving_out slot in the table if no moving_out date is present
-            if not dout:
-                dout_str = NL.join( [ PLACE_HOLDER, f"( { date.today().strftime( DATE_STR_FORMAT ) } )" ] )
+            if not p.move_out:
+                move_out_str = NL.join( [ PLACE_HOLDER, f"( { date.today().strftime( DATE_STR_FORMAT ) } )" ] )
         
         table_data.append( [
-            n,
-            din_str,
-            dout_str,
+            p.name,
+            move_in_str,
+            move_out_str,
             effective_months_str,
             invoices
         ])
         
-    if not data: # Database has no entries
+    if not persons: # Database has no entries
         table_data = [["no data"]*len(TABLE_HEADER_PERSONS_DETAIL)]
     
     return tabulate(
@@ -813,32 +904,131 @@ def get_tabular_person_detail( data:list[tuple[str, date, date]], tablefmt="grid
 #---------------------#
 # TABULATE - READINGS #
 #---------------------#
+@dataclass
+class Measurement:
+    absolute : float | None
+    mean     : float | None
+    deviation: float | None
+    
+    minimum: float | Date | None = None
+    maximum: float | Date | None = None
+
+@dataclass
+class Organized_point:
+    amount_points: int
+    
+    days_stats: Measurement
+    values_stats_per_day: list[ Measurement ]
+
+@dataclass
+class Organized_month:
+    month: int
+    points: Organized_point
+
+@dataclass
+class Organized_year:
+    year: int
+    points: Organized_point
+
+@dataclass
+class Grouped_year_organized_month:
+    year: int
+    months: list[ Organized_month ]
+
 def get_all_reading_dates() -> list[str]:
+    """
+     fetches all individual reading dates in database
+
+    Returns:
+        `list[str]`: dates of person in database
+    """
     data = SESSION.get_reading_all()
     
-    return [ d for d, *_ in data ]
+    return [ r.date for r in data ]
 
-def get_tabular_reading_simple( data:list[tuple[object, ...]], tablefmt="psql" ) -> str:
-    data = [ [ 
-              d.strftime( DATE_STR_FORMAT ),
-              *[ format_decimal( v[k], LIST_DIGIT_OBJ_LAYOUTS[k] ) for k in range(COUNT_READING_OBJS) ]
-              ] for d, *v in data ]
+def get_tabular_reading_simple( readings:list[ Reading ], tablefmt="psql" ) -> str:
+    """
+    generate simple `tabulate` table of readings
+
+    Args:
+        readings (`list[Reading]`): list of readings to be tabulated
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "grid".
+
+    Returns:
+        `str`: string of table
+    """
+    readings = [
+        [
+            r.date.strftime( DATE_STR_FORMAT ),
+            *[
+                format_decimal( r.attributes[k], LIST_DIGIT_OBJ_LAYOUTS[k] ) for k in range(COUNT_READING_ATTRIBUTES)
+            ]
+        ]
+        for r in readings
+    ]
+    
     return tabulate(
-        data,
+        readings,
         headers=TABLE_HEADER_READINGS_SIMPLE,
         tablefmt=tablefmt,
         disable_numparse=True,
-        colalign=('left', *['decimal']*COUNT_READING_OBJS)
+        colalign=('left', *['decimal']*COUNT_READING_ATTRIBUTES)
     )
 
-# todo: add better typing support
-def gather_readings_output( data:list[tuple[object, ...]], use_years_for_stats_section:bool=True ) -> str:
-    table_raw = get_tabular_reading_detail( data )
-    table_stats = get_tabular_reading_stats( data, use_years_for_stats_section )
+
+def generate_printout_readings_all( readings:list[ Reading ], use_years_for_stats_section:bool=True ) -> str:
+    """
+    generate string of readings to be displayed
+
+    consists of two parts:
+    1. Table of each individual readings + statistical information
+    2. Table of readings grouped and summarized by [optional](year and) month with additional statistical information
+
+    Args:
+        readings (`list[ Reading ]`): raw data directly from database
+        use_years_for_stats_section (`bool`, optional): if `True` groups readings in `Table 2` by year and months, `False` groups only by months. Defaults to `True`.
+
+    Returns:
+        str: Tables of readings formatted to be printed on screen or pdf
+    """
+    table_raw = generate_printout_readings_detail( readings )
+    table_stats = generate_printout_readings_statistics( readings, use_years_for_stats_section )
     
     return ''.join([table_raw, NL, NL, table_stats, NL])
 
-def get_tabular_reading_detail( data:list[tuple[object, ...]], tablefmt="grid" ) -> str:
+def generate_printout_readings_detail( readings:list[ Reading ], tablefmt="grid" ) -> str:
+    """
+    generate string of table for detailed readings output
+
+    ---
+    #### Table of each individual readings + statistical information. 
+    #### Table layout will be according to the following:
+    
+    Legend:
+    - `Highlighted`: highlighted literals define one chunk of e.g. a str or other information
+    - `$xyz$`: highlighted and encapsulated by `$` literals define input-variables to be inserted
+    
+    Header:
+    | Date section | value_0 | value_1 | ... |
+    |:------------ |:-------:|:-------:|-----|
+    | `Date`         |       `$name_value_0$`       |       `$name_value_1$`       | ... |
+    | `Delta`        | `delta/day` `absolute delta` | `delta/day` `absolute delta` | ... |
+    
+    Body ( Data ):
+    | Date section | value_0 | value_1 | ... |
+    |:------------ |:-------:|:-------:|-----|
+    | `$Date_reading_x$`          |                `$value_0$`               |                `$value_1$`               | ... |
+    | `Days:` `$Delta_reading_x$` | `$delta_per_day_0$` `$absolute_delta_0$` | `$delta_per_day_1$` `$absolute_delta_1$` | ... |
+    
+
+    ---
+    Args:
+        readings (`list[ Reading ]`): raw data directly from database
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "grid".
+
+    Returns:
+        str: Table of detailed readings formatted to be printed on screen or pdf
+    """
     table_data = []
     
     tabulating = lambda tab_data: tabulate( 
@@ -846,191 +1036,239 @@ def get_tabular_reading_detail( data:list[tuple[object, ...]], tablefmt="grid" )
                                            headers=TABLE_HEADER_READINGS_DETAIL,
                                            tablefmt=tablefmt,
                                            disable_numparse=True,
-                                           colalign=('left', *['center']*COUNT_READING_OBJS)
+                                           colalign=('left', *['center']*COUNT_READING_ATTRIBUTES)
                                            )
     
-    if not data: # Database has no entries
+    if not readings: # Database has no entries
         return tabulating( [["no data"]*len(TABLE_HEADER_READINGS_DETAIL)] )
     
     
     # append first entry since the following loop start iterating at the second entry
-    table_data.append([
-        data[0][0].strftime( DATE_STR_FORMAT ) +NL+ f"    Tage:---",
+    table_data.append( [
+        readings[0].date.strftime( DATE_STR_FORMAT ) +NL+ f"    Tage:---",
         *[
-            format_decimal( data[0][1+k], LIST_DIGIT_OBJ_LAYOUTS[k] ) +NL+\
+            format_decimal( readings[0].attributes[k], LIST_DIGIT_OBJ_LAYOUTS[k] ) +NL+\
             format_decimal( None, DIGIT_LAYOUT_DELTA ) +" "+ format_decimal( None, LIST_DIGIT_OBJ_LAYOUTS[k] )
-            for k in range(COUNT_READING_OBJS)
+            for k in range(COUNT_READING_ATTRIBUTES)
         ]
-    ])
+    ] )
     
     # "can't" use enumerate(...) since indexing should start at 1 and enumerate can't work with that
     # it would be feasible to use enumerate but for now this seems simpler
-    for i in range(1, len(data)):
-        d, *v = data[i]
+    for i in range(1, len(readings)):
+        r = readings[i]
         
-        delta = [0] * COUNT_READING_OBJS
+        delta = [None] * COUNT_READING_ATTRIBUTES
         
-        table_data.append( [ d.strftime( DATE_STR_FORMAT ) +NL+ f"    Tage:{(d - data[i-1][0]).days:>3d}" ] )
+        table_data.append( [ r.date.strftime( DATE_STR_FORMAT ) +NL+ f"    Tage:{(r.date - readings[i-1].date).days:>3d}" ] )
         
         for k in range( COUNT_DIGIT_OBJS ):
-            # implicitly catches case 7
-            if not v[k]:
+            if r.attributes[k] is None:
+                table_data[-1].append(
+                    format_decimal( None, LIST_DIGIT_OBJ_LAYOUTS[k] ) +NL+\
+                    format_decimal( None, DIGIT_LAYOUT_DELTA ) +" "+ format_decimal( None, LIST_DIGIT_OBJ_LAYOUTS[k] )
+                )
                 continue
             
+            delta[k]  = None
             earlier_v = None
             n = (i-1)+1
-
+            
             # search for an earlier value to calculate a delta value
             while (n:=n-1) >= 0:
-                earlier_v = data[n][1+k]
+                earlier_v = readings[n].attributes[k]
                 if earlier_v is not None:
-                    delta[k] = v[k] - earlier_v
+                    delta[k] = r.attributes[k] - earlier_v
                     break
             
-            ddays = ( d - data[n][0] ).days
+            ddays = ( r.date - readings[n].date ).days
             
             table_data[-1].append(
-                format_decimal( v[k], LIST_DIGIT_OBJ_LAYOUTS[k] ) +NL+\
+                format_decimal( r.attributes[k], LIST_DIGIT_OBJ_LAYOUTS[k] ) +NL+\
                 format_decimal( delta[k]/ddays if delta[k] else None, DIGIT_LAYOUT_DELTA ) +" "+ format_decimal( delta[k], LIST_DIGIT_OBJ_LAYOUTS[k] )
             )
     
     return tabulating( table_data )
 
-def get_tabular_reading_stats( data:list[tuple[object, ...]], use_years_for_stats_section:bool=True, tablefmt="grid" ) -> str:
-    months = readings_organize_data_months( data )
+def generate_printout_readings_statistics( readings:list[ Reading ], use_years_for_stats_section:bool=True, tablefmt="grid" ) -> str:
+    """
+    generate string of table of readings grouped and summarized by [optional](years and) months
+
+    --- 
+    #### Table layout will be according to the layout found in `readings_tabulate_data(...)`
+    
+    ---
+    Args:
+        readings (`list[ Reading ]`): raw data directly from database
+        use_years_for_stats_section (`bool`, optional): if `True` groups readings in `Table 2` by year and months, `False` groups only by months. Defaults to `True`.
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "grid".
+
+    Returns:
+        str: Table of readings grouped and summarized by [optional](year and) month with additional statistical information to be printed on screen or pdf
+    """
+    years = readings_organize_data_monthly( readings )
     
     if use_years_for_stats_section:
-        stats = readings_organize_data_years( data )
+        stats = readings_organize_data_yearly( readings )
     else:
-        stats = readings_organize_data_span( data )
+        stats = readings_organize_data_span( readings )
     
-    return readings_tabulate_data( months, stats, use_years_for_stats_section, tablefmt )
+    return readings_tabulate_data( years, stats, use_years_for_stats_section, tablefmt )
 
-def readings_organize_data_months( data:list[tuple[object, ...]] ) -> dict[int, dict[int, tuple[int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]]] ]]:
-    # returns following structure:
-    #   dict(
-    #       year,
-    #       dict(
-    #           month,
-    #           tuple(
-    #               amount_points,
-    #               tuple(total_d, total_list),
-    #               tuple(mean_delta_d, per_day_mean_list),
-    #               tuple(deviation_delta_d, per_day_deviation_list)
-    #            )
-    #       )
-    #   )
+
+def readings_organize_data_monthly( readings:list[ Reading ] ) -> list[ Grouped_year_organized_month ]:
+    """
+    generate list of statistically analyzed data
+
+    - Data is grouped by year and by month.
+    - Only the month subgroups are statistically analyzed and summarized.
+
+    Args:
+        readings `(list[ Reading ]`): raw data directly from database
+
+    Returns:
+        `list[ Grouped_year_organized_month ]`: list of yearly grouped and monthly analyzed data
+    """
     
     # sort all data entries by date (they should already be ordered correctly, but you never know)
-    data = sorted( data, key=lambda d, *_: d )
+    readings = sorted( readings, key=lambda r: r.date )
+
+    years = [ Grouped_year_organized_month( yr, [] ) for yr in sorted( set( map(lambda r: r.date.year, readings) ) ) ]
     
-    # get all unique years as a dict
-    years = { d.year:{} for d, *_ in data }
-    
-    for year in years.keys():
-        # get all unique months of a specific year as a dict
-        months = { d.month:[] for d, *_ in data if d.year == year }
+    for year in years:
+        filtered_data = list( filter( lambda r: r.date.year == year.year, readings ) )
         
-        # put all entries into their associated month slot
-        for d, *v in data:
-            months[d.month].append( (d, *v) )
-            
-        # filter out all months with not enough entries for proper calculations
-        months = { k: v for k, v in months.items() if len(v) > 1 }
+        month_ids = list( map( lambda r: r.date.month, filtered_data ) )
         
-        for month_id, points in months.items():
-            months[month_id] = readings_calculate_statistics( points, date(year, month_id, 1), date(year, month_id+1, 1) if month_id < 12 else date(year+1, 1, 1) )
+        months = {
+            m_id : 
+            list( filter(lambda r: r.date.month == m_id, filtered_data) ) for m_id in month_ids
+        }
+        
+        months = dict( filter( lambda kv: len(kv[1]) > 1, months.items() ) )
+        
+        year.months = [
+            Organized_month( 
+                month_id,
+                readings_calculate_statistics(
+                    points, 
+                    date(year.year, month_id, 1), 
+                    date(year.year, month_id+1, 1) if month_id < 12 else date(year.year+1, 1, 1) 
+                )
+            )
+            for month_id, points in months.items()
+        ]
+    
+    return list( filter( lambda y: y.months, years ) )
 
-        years[year] |= months
-    
-    return years
+def readings_organize_data_yearly( readings:list[ Reading ] ) -> list[ Organized_year ]:
+    """
+    generate list of statistically analyzed data
 
-def readings_organize_data_years( data:list[tuple[object, ...]] ) -> dict[int, tuple[int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]]]]:
-    # returns following structure:
-    #   dict(
-    #       years,
-    #       tuple(
-    #           amount_points,
-    #           tuple(total_d, total_list),
-    #           tuple(mean_delta_d, per_day_mean_list),
-    #           tuple(deviation_delta_d, per_day_deviation_list)
-    #        )
-    #   )
+    - Data is grouped by year.
+    - Data is, per annual group, statistically analyzed and summarized.
+
+    Args:
+        readings `(list[ Reading ]`): raw data directly from database
+
+    Returns:
+        `list[ Organized_year ]`: list of yearly grouped and monthly analyzed data
+    """
+    year_ids = sorted( set( map( lambda r: r.date.year, readings ) ) )
     
-    # ------------------------------------------------------------------------------------------------------------------------------------------------------
-    # YES! this is more or less the same code as above for the months version
-    # It is actually friendlier for readability to NOT make both statistical calculations in one loop, thats why we now do more or less the same loop again
-    # ------------------------------------------------------------------------------------------------------------------------------------------------------
+    out_list = []
+    for year_id in year_ids:
+        points = list( filter( lambda r: r.date.year == year_id, readings ) )
+
+        out_list.append(
+            Organized_year(
+                year_id,
+                readings_calculate_statistics( points, date(year_id, 1, 1), date(year_id+1, 1, 1) )
+            )
+        )
     
+    return out_list
+
+def readings_organize_data_span( readings:list[ Reading ] ) -> Organized_point:
+    """
+    generate list of statistically analyzed data
+
+    - Data is grouped into one group.
+    - Data is statistically analyzed and summarized.
+
+    Args:
+        readings `(list[ Reading ]`): raw data directly from database
+
+    Returns:
+        `list[ Organized_year ]`: list of yearly grouped and monthly analyzed data
+    """
     # sort all data entries by date (they should already be ordered correctly, but you never know)
-    data = sorted( data, key=lambda d, *_: d )
+    readings = sorted( readings, key=lambda r: r.date )
     
-    # get all unique years as a dict
-    years = { d.year:{} for d, *_ in data }
-    
-    for year_id in years.keys():
-        # get all points of this year
-        points = list( filter( lambda param: param[0].year == year_id, data ) )
+    return readings_calculate_statistics( readings )
 
-        years[year_id] = readings_calculate_statistics( points, date(year_id, 1, 1), date(year_id+1, 1, 1) )
-    
-    return years
 
-def readings_organize_data_span( data:list[tuple[object, ...]] ) -> dict[int, tuple[int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]]]]:
-    # returns following structure:
-    #   tuple(
-    #       amount_points,
-    #       tuple(total_d, total_list),
-    #       tuple(mean_delta_d, per_day_mean_list),
-    #       tuple(deviation_delta_d, per_day_deviation_list)
-    #    )
-    
-    # ------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Follows a similar and simplified structure as above
-    # ------------------------------------------------------------------------------------------------------------------------------------------------------
-    
-    # sort all data entries by date (they should already be ordered correctly, but you never know)
-    data = sorted( data, key=lambda d, *_: d )
-    
-    return readings_calculate_statistics( data )
+def readings_calculate_statistics( points:list[ Reading ], extrapolation_date_lower_bound:date=None, extrapolation_date_upper_bound:date=None ) -> Organized_point:
+    """
+    statistically analyze a set of reading points
 
-def readings_calculate_statistics( points:list[tuple[object, ...]], extrapolation_date_lower_bound:date=None, extrapolation_date_upper_bound:date=None ) -> tuple[int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]]]:
+    calculates the following for the total days and for each reading-attribute:
+    - sum
+    - mean
+    - standard deviation
+    - minimum
+    - maximum
+    
+    IF `extrapolation_date_lower_bound` OR `extrapolation_date_upper_bound` are not `None`:
+        The calculated data is extra-/interpolated to the given time span.
+        Expect noisy values for insufficiently small time spans or insufficient amounts of data points.
+
+    Args:
+        points (`list[ Reading ]`): raw data directly from database
+        extrapolation_date_lower_bound (`date`, optional): lower bound for extra-/interpolation. Defaults to None.
+        extrapolation_date_upper_bound (`date`, optional): upper bound for extra-/interpolation. Defaults to None.
+
+    Returns:
+        `Organized_points`: statistically analyzed data points
+    """
+    points = sorted( points, key=lambda r: r.date )
+    
     amount_points = len(points)
     
     if amount_points < 2:
-        return ( 0, [0]*(COUNT_READING_OBJS+1), [0]*(COUNT_READING_OBJS+1), [-1]*(COUNT_READING_OBJS+1) )
+        return Organized_point( 0, Measurement(0, 0, 0), [Measurement(0, 0, 0)]*COUNT_READING_ATTRIBUTES )
     
-    extrapolation_date_lower_bound  = extrapolation_date_lower_bound  if extrapolation_date_lower_bound  else points[0][0]
-    extrapolation_date_upper_bound = extrapolation_date_upper_bound if extrapolation_date_upper_bound else points[-1][0]
+    extrapolation_date_lower_bound = extrapolation_date_lower_bound if extrapolation_date_lower_bound else points[0].date
+    extrapolation_date_upper_bound = extrapolation_date_upper_bound if extrapolation_date_upper_bound else points[-1].date
     
     
     delta_d, total_d, sum_stats_d, sum_stats_sqr_d = 0.0, 0.0, 0.0, 0.0
     mean_d, deviation_d = 0.0, None
     
-    delta        :list[float]      = [0.0] * COUNT_READING_OBJS
-    total        :list[float|None] = [0.0] * COUNT_READING_OBJS
-    sum_stats    :list[float|None] = [0.0] * COUNT_READING_OBJS
-    sum_stats_sqr:list[float|None] = [0.0] * COUNT_READING_OBJS
-    gap          :list[int]        = [0]   * COUNT_READING_OBJS
+    delta        :list[float]      = [0.0] * COUNT_READING_ATTRIBUTES
+    total        :list[float|None] = [0.0] * COUNT_READING_ATTRIBUTES
+    sum_stats    :list[float|None] = [0.0] * COUNT_READING_ATTRIBUTES
+    sum_stats_sqr:list[float|None] = [0.0] * COUNT_READING_ATTRIBUTES
+    gap          :list[int]        = [0]   * COUNT_READING_ATTRIBUTES
     
-    included_points :list[int]  = [0]    * COUNT_READING_OBJS
-    first_point_date:list[date] = [None] * COUNT_READING_OBJS
-    last_point_date :list[date] = [None] * COUNT_READING_OBJS
+    included_points :list[int]  = [0]    * COUNT_READING_ATTRIBUTES
+    first_point_date:list[date] = [None] * COUNT_READING_ATTRIBUTES
+    last_point_date :list[date] = [None] * COUNT_READING_ATTRIBUTES
     
-    mean     :list[float|None] = [None] * COUNT_READING_OBJS
-    deviation:list[float|None] = [None] * COUNT_READING_OBJS
+    mean     :list[float|None] = [None] * COUNT_READING_ATTRIBUTES
+    deviation:list[float|None] = [None] * COUNT_READING_ATTRIBUTES
     
     # like extrapolation_date_lower_bound, extrapolation_date_upper_bound
     # set these lower and upper bound for each value individually
-    for d, *v in points:
-        for k in range(COUNT_READING_OBJS):
-            if not v[k]:
+    for k in range(COUNT_READING_ATTRIBUTES):
+        for r in points:
+            if not r.attributes[k]:
                 continue
             
             if not first_point_date[k]:
-                first_point_date[k] = d
+                first_point_date[k] = r.date
             
-            last_point_date[k] = d
+            last_point_date[k] = r.date
     
     # different edge cases may occur while analyzing the data. All possible edge cases are listed below as examples and are accounted for in the code below
     # day |    case 1     |     case 2     |      case 3     |      case 4     |      case 5     |      case 6     |      case 7     |
@@ -1044,9 +1282,9 @@ def readings_calculate_statistics( points:list[tuple[object, ...]], extrapolatio
     
     
     for i in range(1, len(points)):
-        d, *v = points[i]
+        r = points[i]
         
-        delta_d          = (d - points[i-1][0]).days
+        delta_d          = (r.date - points[i-1].date).days
         total_d         += delta_d
         sum_stats_d     += delta_d
         sum_stats_sqr_d += delta_d ** 2
@@ -1054,7 +1292,7 @@ def readings_calculate_statistics( points:list[tuple[object, ...]], extrapolatio
         # iterate over all reading value objs
         for k in range( COUNT_DIGIT_OBJS ):
             # implicitly catches case 7
-            if not v[k]:
+            if r.attributes[k] is None:
                 continue
             
             earlier_v = None
@@ -1063,17 +1301,17 @@ def readings_calculate_statistics( points:list[tuple[object, ...]], extrapolatio
             # search for an earlier value to calculate a delta value
             # catches case 2, 3, 5
             while (n:=n-1) >= 0:
-                earlier_v = points[n][1+k]
+                earlier_v = points[n].attributes[k]
                 if earlier_v:
-                    delta[k] = v[k] - earlier_v
+                    delta[k] = r.attributes[k] - earlier_v
                     break
             
             # we are not able to calculate a data value if all previous values are None
             # catches case 4, 6
-            if not earlier_v:
+            if earlier_v is None:
                 continue
             
-            ddays = ( d - points[n][0] ).days
+            ddays = ( r.date - points[n].date ).days
             
             # to correct for large negative values, e.g. because a meter got changed and was reseted to 0 or other faulty data
             # in this context we usually expect positive changes, i.e. strictly monotonic increasing data points
@@ -1097,8 +1335,7 @@ def readings_calculate_statistics( points:list[tuple[object, ...]], extrapolatio
     if amount_points > 2:
         deviation_d = sqrt( ( sum_stats_sqr_d - ( amount_points - 1 ) * ( mean_d**2 ) ) / ( amount_points - 2 ) )
     
-    
-    for k in range( COUNT_DIGIT_OBJS ):
+    for k in range( COUNT_READING_ATTRIBUTES ):
         if included_points[k] <= 0:
             total[k] = None
             continue
@@ -1114,49 +1351,100 @@ def readings_calculate_statistics( points:list[tuple[object, ...]], extrapolatio
         total[k] += ( gap[k] + extra_days ) * mean[k]
     
     
-    return (
+    return Organized_point(
         amount_points,
-        ( total_d    , total     ),
-        ( mean_d     , mean      ),
-        ( deviation_d, deviation )
+        Measurement( total_d, mean_d, deviation_d, extrapolation_date_lower_bound, extrapolation_date_upper_bound ),
+        [ 
+            Measurement(
+                total[k],
+                mean[k],
+                deviation[k],
+                min( filter( lambda r: r.attributes[k] is not None, points ), key=lambda r: r.attributes[k] ),
+                max( filter( lambda r: r.attributes[k] is not None, points ), key=lambda r: r.attributes[k] )
+            )
+            for k in range( COUNT_READING_ATTRIBUTES )
+        ]
     )
 
 def readings_tabulate_data(
-    months:dict[int, dict[ int, tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ] ]],
-    stats :          dict[ int, tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ] ] | tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ],
+    years: list[ Grouped_year_organized_month ],
+    stats: list[ Organized_year ] | Organized_point,
     use_years_for_stats_section:bool=True,
     tablefmt="grid" ) -> str:
+    """
+    generate string of table of readings grouped and summarized by [optional](years and) months
+
+    --- 
+    #### Table layout will be according to the following:
     
+    Legend:
+    - `Highlighted`: highlighted literals define one chunk of e.g. a str or other information
+    - `$xyz$`: highlighted and encapsulated by `$` literals define input-variables to be inserted
+    
+    Layout:
+    - Header:
+    | Date specifics | value_0 | value_1 | ... |
+    |:-------------- |:-------:|:-------:|-----|
+    | `Year : Month`                               |       `$name_value_0$`       |       `$name_value_1$ `      | ... |
+    | `Time Span` `Number of Readings`             |  `Extrapolated Consumption`  |  `Extrapolated Consumption`  | ... |
+    | `Readings`                                   |   `per Day`     `per Week`   |   `per Day`     `per Week`   | ... |
+    | `Days between Readings` `standard deviation` | `standard deviation per Day` | `standard deviation per Day` | ... |
+     
+    - Body ( Data ):
+    | Date specifics | value_0 | value_1 | ... |
+    |:-------------- |:-------:|:-------:|-----|
+    | `$Year_x$` : `$month_y$`                  |          `$extrapolated_consumption_0$`          |          `$extrapolated_consumption_1$`          | ... |
+    | `$time_span_z$` `$number_readings_z$`     | `$consumption_per_day_0$` `$consumption_week_0$` | `$consumption_per_day_1$` `$consumption_week_1$` | ... |
+    | `$days_between_readings_z$` `$std_dev_z$` |             `$std_dev_consumption_0$`            |             `$std_dev_consumption_1$`            | ... |
+    | `- - - - - - - - - - - - - - - - - - -`   |      ` - - - - - - - - - - - - - - - - - `       |      ` - - - - - - - - - - - - - - - - - `       | ... |
+    
+    - IF `use_years_for_stats_section` == `True` => Body has also the following entries:
+    | Date specifics | value_0 | value_1 | ... |
+    |:-------------- |:-------:|:-------:|-----|
+    | `$Year_x$` : `Annual Values`              |          `$extrapolated_consumption_0$`          |          `$extrapolated_consumption_1$`          | ... |
+    | `$time_span_x$` `$number_readings_x$`     | `$consumption_per_day_0$` `$consumption_week_0$` | `$consumption_per_day_1$` `$consumption_week_1$` | ... |
+    | `$days_between_readings_x$` `$std_dev_x$` |             `$std_dev_consumption_0$`            |             `$std_dev_consumption_1$`            | ... |
+
+    ---
+    Args:
+        months (`list[ Grouped_year_organized_month ]`): monthly grouped and statistically analyzed
+        stats  (`list[ Organized_year ] | Organized_points`): if `use_years_for_stats_section`==`True` then yearly grouped and statistically analyzed else grouped and statistically analyzed
+        use_years_for_stats_section (`bool`, optional): if `True` groups readings in `Table 2` by year and months, `False` groups only by months. Defaults to `True`.
+        tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "grid".
+
+    Returns:
+        str: Table of readings grouped and summarized by [optional](year and) month with additional statistical information to be printed on screen or pdf
+    """
+        
     # cspell:ignore Eintr Abls
     # table calculates extrapolated consumptions per month, per Day per Month and per Week per month
     # +--------------------------+--------------------------+--------------------------+--------------------------+
     # | Jahr : Monat             |          Strom           |           Gas            |          Wasser          |
     # | Zeitspanne   Anz. Eintr. | Extrapolierter Verbrauch | Extrapolierter Verbrauch | Extrapolierter Verbrauch |
     # | Ablesungen               |   pro Tag    pro Woche   |   pro Tag    pro Woche   |   pro Tag    pro Woche   |
-    # | Tage bis Abls.|std. Abw. | Standardabweichung p.Tag | Standardabweichung p.Tag | Standardabweichung p.Tag | 
+    # | Tage zw. Abls.|std. Abw. | Standardabweichung p.Tag | Standardabweichung p.Tag | Standardabweichung p.Tag | 
     # +==========================+==========================+==========================+==========================+
     
     # get the maximum width of each columns header
     column_widths = [ max( map( len, lines.splitlines() ) ) for lines in TABLE_HEADER_READINGS_STATS ]
     
-    
     table_data = []
     
-    for y, m in months.items():
-        for m_id, m_values in m.items():
-            table_data.append( readings_format_year_months( y, m_id, m_values, column_widths[0] ) )
+    for year_group in years:
+        for month in year_group.months:
+            table_data.append( readings_format_month( year_group.year, month, column_widths[0] ) )
     
     # add spacing for years
     table_data.append( [ "- "*(column_widths[i]//2) for i in range(len(TABLE_HEADER_READINGS_STATS)) ] )
     
-    if use_years_for_stats_section:
-        for year_id, year_values in stats.items():
-            table_data.append( readings_format_years( year_id, year_values, column_widths[0] ) )
-    else:
-        table_data.append( readings_format_span( months, stats, column_widths[0] ) )
+    if use_years_for_stats_section and isinstance( stats, list ):
+        for year in stats:
+            table_data.append( readings_format_year( year, column_widths[0] ) )
+    elif isinstance( stats, Organized_point ):
+        table_data.append( readings_format_span( stats, column_widths[0] ) )
     
     
-    if not months: # Database has no entries
+    if not years: # Database has no entries
         table_data = [["no data"]*len(TABLE_HEADER_READINGS_STATS)]
     
     
@@ -1168,73 +1456,161 @@ def readings_tabulate_data(
         colalign=('left', 'center', 'center', 'center')
     )
 
-def readings_format_year_months( year:int, month_id:int, data_dict:tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ], column_width:int ) -> list[str]:
-    amount_points,\
-    ( total_d    , total     ),\
-    ( mean_d     , mean      ),\
-    ( deviation_d, deviation ) = data_dict
-    
-    row1 = date(year, month_id, 1).strftime( "%Y : %B" )
-    
-    return [ row1 + NL + readings_format_ddays_stats(amount_points, total_d, mean_d, deviation_d, column_width) ] + readings_format_values(total, mean, deviation)
 
-def readings_format_years( year_id:int, data_dict:dict[ int, tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ] ], column_width:int ) -> list[str]:
-    amount_points,\
-    ( total_d    , total     ),\
-    ( mean_d     , mean      ),\
-    ( deviation_d, deviation ) = data_dict
-    
-    row1 = ( "%d : {:>%ds}" % (year_id, column_width - 4 - 3) ).format('Jahreswerte')
-    
-    return [ row1 + NL + readings_format_ddays_stats(amount_points, total_d, mean_d, deviation_d, column_width) ] + readings_format_values(total, mean, deviation)
+def readings_format_month( year:int, month_data:Organized_month, date_column_width:int ) -> list[str]:
+    """
+    format a reading to be appended to a `tabulate` Table of readings statistic
 
-def readings_format_span(
-    months   :dict[int, dict[ int, tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ] ]],
-    data_dict:                     tuple[ int, tuple[float, list[float]], tuple[float, list[float]], tuple[float, list[float]] ],
-    column_width:int ) -> list[str]:
-    
-    amount_points,\
-    ( total_d    , total     ),\
-    ( mean_d     , mean      ),\
-    ( deviation_d, deviation ) = data_dict
-    
-    
-    year_low  = list(months.keys())[0]
-    year_high = list(months.keys())[-1]
+    This function formats a given month statistic for a given year
 
-    month_low  = list(months[year_low].keys() )[0]
-    month_high = list(months[year_high].keys())[-1]
+    Args:
+        year (`int`): year to be displayed
+        month_data (`Organized_month`): statistically analyzed data
+        date_column_width (`int`): width of date i.e. 1st column in (printable) characters
+
+    Returns:
+        `list[str]`: `tabulate` formatted list of strings
+    """
+    row1 = date(year, month_data.month, 1).strftime( "%Y : %B" )
     
-    date_low  = date( year_low, month_low, 1 ).strftime(r"%Y : %b")
-    date_high = date( year_high, month_high, 1 ).strftime(r"%Y : %b")
+    return [
+        row1 + NL + 
+        readings_format_ddays_stats(
+            month_data.points.amount_points,
+            month_data.points.days_stats,
+            date_column_width
+        ) 
+    ] + readings_format_values( month_data.points.values_stats_per_day )
+
+def readings_format_year( year:Organized_year, date_column_width:int ) -> list[str]:
+    """
+    format a reading to be appended to a `tabulate` Table of readings statistic
+
+    This function formats a given year statistic
+
+    Args:
+        year (`Organized_year`): statistically analyzed data
+        date_column_width (`int`): width of date i.e. 1st column in (printable) characters
+
+    Returns:
+        `list[str]`: `tabulate` formatted list of strings
+    """
+    row1 = ( "%d : {:>%ds}" % (year.year, date_column_width - 4 - 3) ).format('Jahreswerte')
     
+    return [
+        row1 + NL + 
+        readings_format_ddays_stats(
+            year.points.amount_points,
+            year.points.days_stats,
+            date_column_width
+        ) 
+    ] + readings_format_values( year.points.values_stats_per_day )
+
+def readings_format_span( point:Organized_point, date_column_width:int ) -> list[str]:
+    """
+    format a reading to be appended to a `tabulate` Table of readings statistic
+
+    This function formats a given analyzed point (usually statistics of an user specified time span )
+
+    Args:
+        point (`Organized_point`): statistically analyzed data
+        date_column_width (`int`): width of date i.e. 1st column in (printable) characters
+
+    Returns:
+        `list[str]`: `tabulate` formatted list of strings
+    """
     size_of_strftime = 4 + 3 + 3
     
-    row1 = (" {:<%ds}{:>%ds}" % (size_of_strftime, column_width-size_of_strftime )).format( date_low, date_high )
+    row1 =  (" {:<%ds}{:>%ds}" % (size_of_strftime, date_column_width-size_of_strftime ))\
+            .format(
+                point.days_stats.minimum.strftime(r"%Y : %b") if point.days_stats.minimum else 'None',
+                point.days_stats.maximum.strftime(r"%Y : %b") if point.days_stats.maximum else 'None'
+            )
     
-    return [ row1 + NL + readings_format_ddays_stats(amount_points, total_d, mean_d, deviation_d, column_width) ] + readings_format_values(total, mean, deviation)
+    return [
+        row1 + NL + 
+        readings_format_ddays_stats(
+            point.amount_points,
+            point.days_stats,
+            date_column_width
+        ) 
+    ] + readings_format_values( point.values_stats_per_day )
 
 
-def readings_format_ddays_stats( amount_points:int, total_d:float, mean_d:float, deviation_d:float, column_width:int ) -> str:
+def readings_format_ddays_stats( amount_points:int, days_measurement:Measurement, date_column_width:int ) -> str:
+    """
+    format the date column for the reading-statistics `tabulate` Table
+
+    helper function - usually only used by:
+    - `readings_format_month`
+    - `readings_format_year`
+    - `readings_format_span`
+    
+    ---
+    Layout of the formatted output string:
+    
+    | line number | contents of formatted string |
+    | :---------: | :--------------------------: |
+    | 1 | `$time_span_x$` `$number_readings_x$`     |
+    | 2 | `$days_between_readings_x$` `$std_dev_x$` |
+
+    Args:
+        amount_points (`int`): count of readings analyzed for this Table entry
+        days_measurement (`Measurement`): statistical data of the analyzed reading days
+        date_column_width (`int`): width of date i.e. 1st column in (printable) characters
+
+    Returns:
+        `str`: data-column formatted string
+    """
     # column 1, row 2
-    timeSpan_countEntries = f" {total_d:>3.0f} Tage " + ("{:>%dd}" % (column_width - 10)).format(amount_points)
+    timeSpan_countEntries = f" {days_measurement.absolute:>3.0f} Tage " + ("{:>%dd}" % (date_column_width - 10)).format(amount_points)
 
     # column 1, row 3
-    readings_stats = ( " {:s}{:>%ds}" % (column_width - 1 - sum(DIGIT_LAYOUT_DELTA) - 2) ).format( format_decimal( mean_d, DIGIT_LAYOUT_DELTA ), format_decimal( deviation_d, DIGIT_LAYOUT_DELTA ) )
+    readings_stats = ( " {:s}{:>%ds}" % (date_column_width - 1 - sum(DIGIT_LAYOUT_DELTA) - 2) ).format(
+        format_decimal( days_measurement.mean, DIGIT_LAYOUT_DELTA ),
+        format_decimal( days_measurement.deviation, DIGIT_LAYOUT_DELTA )
+    )
     
     return timeSpan_countEntries + NL + readings_stats
 
-def readings_format_values( total:list[float], mean:list[float], deviation:list[float] ) -> list[str]:
-    # function that generates the string to be put in an entry (e.g. cell) of the table    
+def readings_format_values( reading_attributes:list[Measurement] ) -> list[str]:
+    """
+    format all reading-attribute columns for the reading-statistics `tabulate` Table
+
+    helper function - usually only used by:
+    - `readings_format_month`
+    - `readings_format_year`
+    - `readings_format_span`
+    
+    ---
+    Layout for each formatted string of the returned list:
+    
+    | line number | contents of formatted string |
+    | :---------: | :--------------------------: |
+    | 1 |          `$extrapolated_consumption_0$`          |
+    | 2 | `$consumption_per_day_0$` `$consumption_week_0$` |
+    | 3 |             `$std_dev_consumption_0$`            |
+
+    Args:
+        reading_attributes (`list[Measurement]`): list of statistically analyzed reading-attributes
+
+    Returns:
+        `list[str]`: list of reading-attribute-column formatted strings
+    """
     return [ 
-            "{:s}\n{:s}     {:s}\n{:s}".format(
-                format_decimal( total[k], LIST_DIGIT_OBJ_LAYOUTS[k] ),
-                *[
-                    format_decimal( val, digits ) for val, digits in zip( (mean[k], 7*mean[k] if mean[k] else None, deviation[k]), [DIGIT_LAYOUT_DELTA, DIGIT_LAYOUT_DELTA, DIGIT_LAYOUT_DELTA] )
-                ]
-            )
-            for k in range(COUNT_READING_OBJS)
-           ]
+        "{:s}\n{:s}     {:s}\n{:s}".format(
+            # line: 1
+            format_decimal( reading_attributes[k].absolute, LIST_DIGIT_OBJ_LAYOUTS[k] ),
+            
+            # line: 2
+            format_decimal( reading_attributes[k].mean, DIGIT_LAYOUT_DELTA ),
+            format_decimal( 7*reading_attributes[k].mean if reading_attributes[k].mean else None, DIGIT_LAYOUT_DELTA ),
+            
+            # line: 3
+            format_decimal( reading_attributes[k].deviation, DIGIT_LAYOUT_DELTA )
+        )
+        for k in range(COUNT_READING_ATTRIBUTES)
+    ]
 
 #----------------------------------------------------------------------------------------------------------------------
 # MAIN LOOP AND STARTING POINT

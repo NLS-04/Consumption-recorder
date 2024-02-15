@@ -627,7 +627,7 @@ class Console():
     
     @classmethod
     @contextmanager
-    def virtual_area(cls, left_top:tuple[int, int], right_bottom:tuple[int, int]=None, reset_cursor_on_exit:bool=True) -> Console:
+    def virtual_area(cls, left_top:tuple[int, int], right_bottom:tuple[int, int]=None, reset_cursor_on_exit:bool=True):
         """
         Virtually limit the terminal screen to a specific area
         
@@ -772,8 +772,8 @@ class Console():
     def __stdout(cls, code:str) -> None:
         sys.stdout.write( code )
         sys.stdout.flush()
-    
-    
+
+
 if __name__ == "__main__":
     Console.setup( "GUI Test" )
     Console.clear()

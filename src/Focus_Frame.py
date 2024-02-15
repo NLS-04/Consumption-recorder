@@ -183,7 +183,7 @@ class Result():
         return self.__success
     
     @property
-    def data(self) -> list[Optional[list[object]]]:
+    def data(self) -> list[Optional[object]]:
         return list( self.__data.values() )
     
     def __iter__(self):
@@ -202,7 +202,16 @@ class Result():
     def __str__(self) -> str:
         max_width = Manager.max_width_of_strings( self.__data.keys() )[1]
         fmt = "{:>%ds} | {:}" % ( max_width )
-        return f"successful = {self.__success}" + "\n\t".join( ['', fmt.format("Names", "Results")] + [fmt.format(k, v) for k, v in (self.__data.items() if self.__data else [('None', 'None')] )] )
+        return\
+            f"successful = {self.__success}"\
+            + "\n\t".join(
+                ['', fmt.format("Names", "Results")] 
+                + [
+                    "\n\t".join( [fmt.format(k, str(v).splitlines()[0])] + [fmt.format("", vv) for vv in str(v).splitlines()[1:]] )
+                    for k, v 
+                    in (self.__data.items() if self.__data else [('None', 'None')] )
+                ]
+            )
 
     __repr__ = __str__
 #---------------------#
@@ -813,7 +822,22 @@ class Manager():
             if not focus.status in (Status.COMPLETED, Status.COMPLETED_EMPTY):
                 self.__status = Status.INPUT_ERROR
             
-            debug_msg += fmt.format( focus.get_name(), focus.status.name, str(focus.result()), (Input.string(focus.data) if isinstance(focus, Input) else "---") )
+            res = str(focus.result()).splitlines()
+            optional = Input.string(focus.data) if isinstance(focus, Input) else "---"
+            
+            debug_msg += fmt.format(
+                focus.get_name(),
+                focus.status.name,
+                res[0],
+                optional if len(res) == 1 else ""
+            )
+            
+            for s in res[1:]:
+                debug_msg += fmt.format( "", "", s, "" )
+            
+            if len(res) > 1:
+                debug_msg += fmt.format( "", "", "", optional )
+            
         
         
         if self.__status != Status.INPUT_ERROR:
@@ -2547,9 +2571,9 @@ if __name__ == "__main__":
         
         # Test 2
         FM.append( Date( "Datum", True, "", preset_dates=[d for d, *_ in SESSION.get_reading_all()] ) )
-        for i in range(COUNT_READING_OBJS):
-            FM.append( Value( LIST_READING_OBJ_NAMES[i], True, None, LIST_DIGIT_OBJ_LAYOUTS[i] ) )
-            FM.append_rule( 0, LIST_READING_OBJ_NAMES[i], TX_func_factory.date_2_value(SESSION, i) )
+        for i in range(COUNT_READING_ATTRIBUTES):
+            FM.append( Value( LIST_READING_ATTRIBUTE_NAMES[i], True, None, LIST_DIGIT_OBJ_LAYOUTS[i] ) )
+            FM.append_rule( 0, LIST_READING_ATTRIBUTE_NAMES[i], TX_func_factory.date_2_value(SESSION, i) )
         
         FM.append( Button_Manager().append_auto(Button("Ja")).append_auto(Button("Nein")).finalize() )
         FM.append( Select().append_name("Ja").append_name("Nein").finalize() )
