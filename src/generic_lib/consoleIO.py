@@ -1,15 +1,15 @@
-from __future__ import annotations
+from   __future__ import annotations
 
-from typing import Optional, Sequence, overload
+from   typing import Optional, Sequence, overload
 
-from time import time
+from   time import time
 
 import sys
-from contextlib import contextmanager, _GeneratorContextManager
+from   contextlib import contextmanager, _GeneratorContextManager
 
 import console.detection
 import console.utils
-from console.screen import sc, Screen
+from   console.screen import sc, Screen
 
 import pynput.keyboard as keyboard
 
@@ -433,37 +433,38 @@ class Console():
         """ writes to terminal at current cursor position """
         
         str_args = sep.join( map(str, args) )
-        if not cls.__is_virtual: # simply use stdout
-            cls.__stdout( str_args )
-            return
-        
-        
         arg_lines = str_args.splitlines()
         
-        if str_args.startswith('\n'):
-            arg_lines = [''] + arg_lines
+        # normally '\n' at the beginning of a string will be kept
+        # if str_args.startswith('\n'):
+        #     arg_lines = [''] + arg_lines
         
         if str_args.endswith('\n'):
             arg_lines += ['']
         
-        width = cls.get_console_size()[0]
+        if not cls.__is_virtual: # simply use stdout
+            for line in arg_lines:
+                cls.__stdout( line + '\n' )
+            return
+        
+        
+        width, height = cls.get_console_size()
         for i, line in enumerate(arg_lines):
             buffer = line
             
             while True:
                 cls.__stdout( buffer[:width-cls.get_cursor()[0]] )
-        
+
                 if len(buffer) <= width:
                     break
                 
                 if cls.get_cursor()[0] == width:
-                    cls.set_cursor( 0, cls.get_cursor()[1] )
-                    cls.set_cursor( 0, 1, False )
+                    cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 )
                 
                 buffer = buffer[width:]
             
             if i != len(arg_lines) - 1:
-                cls.set_cursor( -(width+1), 1, False )
+                cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 )
     
     @classmethod
     def write_line(cls, *args:str, sep:str=" ") -> None:
@@ -574,7 +575,7 @@ class Console():
         """
         
         # only return 'Key' if the user is focused on the terminal
-        # this variable only fulfills only the purpose to register key inputs on the terminal and to let the Key class read all strokes of e.g. an compounded Key like enter
+        # this variable only fulfills the purpose to register key inputs on the terminal and to let the Key class read all strokes of e.g. an compounded Key like enter
         _k = console.utils.wait_key()
         if ord(_k) == 224 or ord(_k) == 0:
             _k += console.utils.wait_key()
@@ -649,7 +650,7 @@ class Console():
         right_bottom = right_bottom if right_bottom else cls.get_console_size()
         
         assert left_top[0] <= right_bottom[0] and left_top[1] <= right_bottom[1], f"incompatible corners: left_top must be smaller or equal to right_bottom"
-        
+        assert left_top[0] >= 0 and left_top[1] >= 0, f"incompatible left_top corner: left_top corner coordinates are {left_top[0]}, but both must be non-negative"
         
         col, line = cls.get_cursor()
         
@@ -738,11 +739,41 @@ class Console():
     
     @classmethod
     def _transform_local_2_global(cls, col:int, line:int) -> tuple[int, int]:
+        """
+        transform positions from the virtualized/local console-scope to the actual console-scope
+
+        will clamp the position into the available space.
+        
+        Note: 
+            if no virtual_area is active, the resulting position is the same as the inputted (clamped to the available console space)
+
+        Args:
+            col (`int`): column of the local position
+            line (`int`): line of the local position
+
+        Returns:
+            `tuple[int, int]`: column, line in global coordinates
+        """
         return cls.clamp_point( (col + cls._get_screen_lt()[0], line + cls._get_screen_lt()[1]), cls._get_screen_lt(), cls._get_screen_rb() )
     
     @classmethod
     def _transform_global_2_local(cls, col:int, line:int) -> tuple[int, int]:
-        return col - cls._get_screen_lt()[0], line - cls._get_screen_lt()[1]
+        """
+        transform positions from the global console-scope to the virtualized/local console-scope
+
+        will clamp the position into the available space.
+        
+        Note: 
+            if no virtual_area is active, the resulting position is the same as the inputted (clamped to the available console space)
+
+        Args:
+            col (`int`): column of the global position
+            line (`int`): line of the global position
+
+        Returns:
+            `tuple[int, int]`: column, line in local coordinates
+        """
+        return cls.clamp_point( (col - cls._get_screen_lt()[0], line - cls._get_screen_lt()[1]), (0,0), cls.get_console_size() )
 
     
     @classmethod
@@ -769,6 +800,24 @@ class Console():
         )
 
     @classmethod
+    def __set_cursor_no_clamp(cls, col:int, line:int, absolute:bool=True) -> None:
+        """
+        move the cursor to a specific position in the terminal w/o clamping the position
+        
+        Args:
+            col (`int`): column position (x)
+            line (`int`): line position (y)
+            absolute (`bool`, optional): interpret (`col`, `line`) as `absolute` position in the Console or as relative (`not absolute`) positions to the current cursor position. Defaults to True.
+        """
+        c, l = (0, 0) if absolute else cls.get_cursor()
+
+        col, line = col + c + cls._get_screen_lt()[0], line + l + cls._get_screen_lt()[1]
+        
+        assert col >= 0 and line >= 0, f"requested cursor position of ({col}, {line}) is invalid"
+        
+        cls.__stdout( sc.move_to( col, line ) )
+
+    @classmethod
     def __stdout(cls, code:str) -> None:
         sys.stdout.write( code )
         sys.stdout.flush()
@@ -780,6 +829,13 @@ if __name__ == "__main__":
     Console.set_cursor( 0, 0 )
     
     # Testing Console =================================================================================================
+    with Console.virtual_area( (1,1), (5,5), False ):
+        w, h = Console.get_console_size()
+        for l in range(h+1):
+            for c in range(w+1):
+                Console.set_cursor( c, l, True )
+                Console.write( Console.get_key().get_char() )
+    
     
     # Testing code snippets ============================================================================================
     

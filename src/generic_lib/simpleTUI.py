@@ -1,32 +1,25 @@
-from __future__ import annotations
+from __future__      import annotations
 from collections.abc import Mapping
+from typing          import Self, Protocol, Callable, Sequence, Optional, \
+                            TypeVar, Final, final, runtime_checkable, overload, Any
 
-from typing import Self, Protocol, Callable, Sequence, Optional, TypeVar, Final, final, runtime_checkable, overload, Any
-
-from enum import Enum, auto
-from math import floor, sqrt
+from enum     import Enum, auto
+from math     import floor, sqrt
 from datetime import date
 from textwrap import fill
 
-import logging
 import inspect
 
-import pynput.keyboard as keyboard
 
-from constants import *
-from dbHandler import DBSession
-from gui import Console, Key
+from generic_lib.logger    import get_logger, logging
+from generic_lib.consoleIO import Console, Key, keyboard
+from generic_lib.utils     import *
+from constants             import *
 
 
 #----------------------------------------------------------------------------------------------------------------------
 # Manage Logging
 #----------------------------------------------------------------------------------------------------------------------
-_log_dir = Path(__file__).parent.parent.joinpath("logs")
-_log_dir.mkdir( parents=True, exist_ok=True )
-
-_log_path = _log_dir.joinpath("debug_Frames.log")
-
-_log_path.open("w").close()
 
 class _adapter( logging.LoggerAdapter ):
     lines_to_class_name: dict[ tuple[int, int], str ]
@@ -47,17 +40,15 @@ class _adapter( logging.LoggerAdapter ):
         if class_name:
             class_name += '.'
         
+        # self.extra can be used to communicate information from adapters to the logger
         self.extra['class_name'] = class_name
         
         return super().process( msg, kwargs )
     
     def get_class_name( self, line:int ) -> str:
-        out = list( filter( lambda items: items[0][0] <= line <= items[0][1], self.lines_to_class_name.items() ) )
+        out: list[ tuple[tuple[int, int], str] ] = list( filter( lambda items: items[0][0] <= line <= items[0][1], self.lines_to_class_name.items() ) )
         
-        if out:
-            return out.pop(0)[1]
-        
-        return ""
+        return out.pop(0)[1] if out else ""
 
     def remember_class(self, cls):
         lines, start_index = inspect.getsourcelines( cls )
@@ -65,36 +56,8 @@ class _adapter( logging.LoggerAdapter ):
         self.lines_to_class_name |= { (start_index+1, start_index+len(lines)-1): cls.__name__ }
         
         return cls
-class _format( logging.Formatter ):
-    fmt_base = "{asctime:<8s} [ {levelname:>8s} ] | @{lineno:>4d}::{identifier:>35s}: "
-    
-    def __init__(self) -> None:
-        super().__init__(self.fmt_base + "{message:s}", "%H:%M:%S", "{")
-        
-    def format(self, record) -> str:
-        record.identifier = record.class_name + record.funcName
-        
-        s = super().format(record)
-        
-        if record.exc_text or record.exc_info or record.stack_info:
-            return s
-        
-        l_space = ' ' * ( len(s) - len(record.message) )
-        record.message = ('\n'+l_space).join( record.message.splitlines() )
-        
-        return self.formatMessage(record)
 
-LOGGER = logging.getLogger( __name__ )
-LOGGER.setLevel(logging.DEBUG)
-
-_fh = logging.FileHandler( _log_path.as_posix() )
-_fh.setLevel(logging.DEBUG)
-_fh.setFormatter( _format() )
-
-LOGGER.addHandler( _fh )
-
-LOGGER = _adapter( LOGGER )
-
+LOGGER = get_logger( PATH_LOGS, "debug_Frames", _adapter, identifier = lambda r: r.class_name + r.funcName )
 
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -200,7 +163,7 @@ class Result():
         return self.__data[ list(self.__data.keys())[name_or_index] ]
 
     def __str__(self) -> str:
-        max_width = Manager.max_width_of_strings( self.__data.keys() )[1]
+        max_width = max_width_of_strings( self.__data.keys() )[1]
         fmt = "{:>%ds} | {:}" % ( max_width )
         return\
             f"successful = {self.__success}"\
@@ -261,7 +224,10 @@ class Register():
         foc_rx = cls.__frames[ cls._map_to_index( receiver ) ]
         
         test_run = tx_transform_function( foc_tx.get_data() )
-        assert isinstance(test_run, tuple) and isinstance(test_run[0], bool) and all( [ isinstance(char, str) for char in test_run[1] ] ), f"func returns: {type(test_run)} instead of `tuple`[`bool`, `list`[`str`]]"
+        assert isinstance(test_run, tuple)      \
+           and isinstance(test_run[0], bool)    \
+           and all( [ isinstance(char, str) for char in test_run[1] ] ), \
+           f"func returns: {type(test_run)} instead of `tuple`[`bool`, `list`[`str`]]"
         
         id_tx = id(foc_tx)
         id_rx = id(foc_rx)
@@ -282,9 +248,8 @@ class Register():
         if id_foc == cls.__id_manager:
             for id_tx in cls.__rule_set.keys():
                 cls.__transmit_rule( id_tx )
-            return
         
-        if id_foc in cls.__rule_set:
+        elif id_foc in cls.__rule_set:
             cls.__transmit_rule( id_foc )
         
     
@@ -314,8 +279,10 @@ class Register():
     
     @classmethod
     def set_manager(cls, manager:Manager) -> None:
-        if not cls.__id_manager:
-            cls.__id_manager = id( manager )
+        assert isinstance( manager, Manager ), f"the supplied manager was of type {type(manager)} but MUST be of type Manager"
+        assert cls.__id_manager == -1, "An manager has already been set"
+        
+        cls.__id_manager = id( manager )
     
     @classmethod
     def append(cls, focus:Registerable) -> None:
@@ -379,6 +346,8 @@ class Register():
 
     @classmethod
     def __transmit_rule(cls, id_tx:int) -> None:
+        assert id_tx in cls.__rule_set.keys(), "The supplied id has no registered rule to transmit"
+        
         for id_rx, func in cls.__rule_set[id_tx]:
             foc_tx = cls.__lookup_frames[id_tx]
             foc_rx = cls.__lookup_frames[id_rx]
@@ -410,55 +379,6 @@ class Registerable( Protocol ):
     def get_data(self) -> list[str]: ...
     def set_data(self, data:list[str]) -> None: ...
     def get_parsed_data(self) -> tuple[bool, object]: ...
-
-
-class TX_func_factory():
-    @staticmethod
-    def name_2_date_move_in( DB:DBSession ) -> Callable[ [list[str]], tuple[bool, list[str]] ]:
-        return TX_func_factory.name_2_dates( DB, 0 )
-    
-    @staticmethod
-    def name_2_date_move_out( DB:DBSession ) -> Callable[ [list[str]], tuple[bool, list[str]] ]:
-        return TX_func_factory.name_2_dates( DB, 1 )
-    
-    @staticmethod
-    def name_2_dates( DB:DBSession, return_index:int ) -> Callable[ [list[str]], tuple[bool, list[str]] ]:
-        assert 0 <= return_index <= 1, f"supplied return_index must be 0 or 1"
-        
-        def f( name:list[str] ) -> tuple[bool, list[str]]:
-            exists, data = DB.exists_person( Interactable.string(name) )
-            _, *datas = data[0] if exists else ( None, None, None )
-            
-            # raw date size
-            res = [''] * 8
-            
-            if datas[return_index]:
-                res = list(datas[return_index].strftime("%d%m%Y"))
-            
-            return exists, res
-        return f
-    
-    @staticmethod
-    def date_2_value( DB:DBSession, index_of_readings_value:int ) -> Callable[ [list[str]], tuple[bool, list[str]] ]:
-        assert 0 <= index_of_readings_value < len(LIST_DIGIT_OBJ_LAYOUTS), f"supplied return_index must be greater or equal to 0 and less than {len(LIST_DIGIT_OBJ_LAYOUTS)}(the amount of value_objects)"
-        
-        def f( date_:list[str] ) -> tuple[bool, list[str]]:
-            res = [''] * sum( LIST_DIGIT_OBJ_LAYOUTS[index_of_readings_value] )
-            try:
-                # from Focus_Date.transform
-                d = Date.str_to_date( date_ )
-                
-                exists, data = DB.exists_readings( d, d )
-                vals = data[0][1:] if exists else [None]*len(LIST_DIGIT_OBJ_LAYOUTS)
-                
-                if vals[index_of_readings_value]:
-                    res = Value.float_to_data_format( vals[index_of_readings_value], LIST_DIGIT_OBJ_LAYOUTS[index_of_readings_value] )
-                
-                return exists, res
-            except ValueError:
-                return False, res
-        return f
-
 
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -543,14 +463,20 @@ class Manager():
         _o.manager = self
         self.__frames.append( _o )
         
+        types: list[str] = []
+        if isinstance( _o, Interactable ):
+            types.append( "Interactable" )
+            self.__append_Interactable( _o )
+        
         if isinstance( _o, Registerable ):
+            types.append( "Registerable" )
             self.__append_Registerable( _o )
         
         if isinstance( _o, Confirmation ):
+            types.append( "Confirmation" )
             self.__append_confirmation_focus( _o )
-        
-        if isinstance( _o, Interactable ):
-            self.__append_Interactable( _o )
+
+        LOGGER.debug(f"Appended Frame: {_o} {types}")
         
         return self
 
@@ -669,18 +595,15 @@ class Manager():
     # initialization and setup #
     #--------------------------#
     def __append_Interactable(self, _o:Interactable, /) -> Self:
-        LOGGER.debug(f"Appended Interactable: {_o}")
         self.__interactables.append( _o )
         return self
     
     def __append_Registerable(self, _o:Registerable, /) -> Self:
-        LOGGER.debug(f"Appended Registerable: {_o}")
         Register.append( _o )
         return self
     
     def __append_confirmation_focus(self, _o:Confirmation, /) -> Self:
         assert self.__confirmation is None, "Only ONE Confirmation Frame per Manager can be appended"
-        LOGGER.debug(f"Appended Confirmation: {_o}")
         self.__confirmation = _o
         self.__confirmation.set_callback( self.__check_statuses )
         return self
@@ -729,14 +652,14 @@ class Manager():
             name_sizes.append( foc.get_required_name_size() )
             dimensions.append( foc.get_required_dimensions() )
         
-        max_len_title, validate_column_offset = Manager._setup_interactable_titles( name_sizes, dimensions )
+        max_len_title, validation_column_offset = Manager._setup_interactable_titles( name_sizes, dimensions )
         
         # set positions of focuses (relative to the virtual screen coordinates)
         for foc in self.__interactables:
-            foc.set_offsets( max_len_title, (validate_column_offset, 0) )
+            foc.set_offsets( max_len_title, (validation_column_offset, 0) )
 
     def _log_debug(self) -> None:
-        max_size_type_name = max( 4, self.max_width_of_strings( map( lambda f: f.__class__.__name__, self.__frames) )[1] )
+        max_size_type_name = max( 4, max_width_of_strings( map( lambda f: f.__class__.__name__, self.__frames) )[1] )
         
         fmt        = "               [ {:>5d}, {:>11s} ] ( {:>3d}, {:>3d} ) ( {:>3d}, {:>3d} ) | {:>%ds} | {:s}" % max_size_type_name
         fmt_header = "Frames: indices[frames, interactable]     position     bounding | " + ' '*(max_size_type_name-4) + "type | extra"
@@ -802,7 +725,7 @@ class Manager():
         
         returning False indicates to the confirmation module that it should reset its confirmation button and expect an other user input (in the future)
         '''
-        fmt = "\t{:>%ds} | {:>%ds} | {:s}, {:s}\n" % ( self.max_width_of_strings( [x.get_name() for x in self.__interactables_no_confirm] )[1], self.max_width_of_strings( [s.name for s in Status] )[1] )
+        fmt = "\t{:>%ds} | {:>%ds} | {:s}, {:s}\n" % ( max_width_of_strings( [x.get_name() for x in self.__interactables_no_confirm] )[1], max_width_of_strings( [s.name for s in Status] )[1] )
         debug_msg = f"Checking statuses: current internal status: {self.__status}\n"
         
         if self.__status == Status.USER_INTERRUPT:
@@ -823,7 +746,7 @@ class Manager():
                 self.__status = Status.INPUT_ERROR
             
             res = str(focus.result()).splitlines()
-            optional = Input.string(focus.data) if isinstance(focus, Input) else "---"
+            optional = stringify(focus.data) if isinstance(focus, Input) else "---"
             
             debug_msg += fmt.format(
                 focus.get_name(),
@@ -879,29 +802,12 @@ class Manager():
     # Helper functions #
     #------------------#
     @staticmethod
-    def max_width_of_strings( list_of_str:Sequence[str] ) -> tuple[str, int]:
-        """
-        return the most wide width of the following lines
-
-        Args:
-            list_of_str (`list`[`str`]): lines of string
-
-        Returns:
-            `tuple`[`str`, `int`]: [0] is the line/element with the widest width, [1] is the length of [0]
-        """
-        if not list_of_str:
-            return None, 0
-        
-        res = max( list_of_str, key=len )
-        return res, len(res)
-    
-    @staticmethod
     def _setup_interactable_titles( list_of_titles_sizes:list[int], list_of_sizes:list[Point[int]] ) -> tuple[int, int]:
         max_len_title = max( list_of_titles_sizes ) if list_of_titles_sizes else 0
         
-        validate_column_offset = SIZE_TAB + max( map( lambda s: s.col, list_of_sizes ) ) if list_of_sizes else SIZE_TAB
+        validation_column_offset = SIZE_TAB + max( map( lambda s: s.col, list_of_sizes ) ) if list_of_sizes else SIZE_TAB
 
-        return max_len_title, validate_column_offset
+        return max_len_title, validation_column_offset
 
 
 #----------------#
@@ -966,14 +872,19 @@ class Plain_Text( Frame ):
         if force_width is not None:
             self.text = fill( self.text, force_width )
         
-        self.bounding = Point( Manager.max_width_of_strings( self.text.splitlines() )[1]-1, len(self.text.splitlines())-1 )
+        self.bounding = Point( max_width_of_strings( self.text.splitlines() )[1]-1, len(self.text.splitlines())-1 )
+        
+        LOGGER.debug( f"new Plain_Text with bounding {str(self.bounding)}" )
     
     def render(self) -> None:
         Console.write_in( self.text, *self.position, *self.bounding )
     
     def set_position(self, pos:tuple[int, int], bound:Optional[tuple[int,int]]=None) -> None:
+        before_pos_bound = self.position, self.bounding
         super().set_position( pos, bound )
         self = Plain_Text( self.text, force_width=self.get_dimensions()[0] )
+        
+        LOGGER.debug( "repositioned Plain_Text: [pos=(%3d, %3d), bound=(%3d, %3d)] -> [pos=(%3d, %3d), bound=(%3d, %3d)]", *before_pos_bound[0], *before_pos_bound[1], *self.position, *self.bounding )
 
 
 #---------------------#
@@ -1012,12 +923,6 @@ class Interactable( Frame, Protocol ):
     def get_name(self) -> str: ...
     def get_required_name_size(self) -> int: ...
     def get_required_dimensions(self) -> Point[int]: ...
-    
-    @final
-    @staticmethod
-    def string( _l:list[str], / ) -> str:
-        """ create string version from `data`"""
-        return ''.join( _l )
 
 @LOGGER.remember_class
 class Input( Interactable, Registerable ):
@@ -1093,7 +998,7 @@ class Input( Interactable, Registerable ):
         Returns:
             `object`: transformed object
         """
-        return self.string( self.data )
+        return stringify( self.data )
     
     def predicate(self, transformed_data:object) -> bool:
         """
@@ -1342,16 +1247,16 @@ class Date( Input ):
 
     must_be_listed: bool
     
-    dates: list[date]
+    dates: list[str]
     
     def __init__(
                  self,
                  prompt_name     : str,
-                 accept_empty    : bool            = False,
-                 prefill_date_ISO: str             = date.today().strftime("%d%m%Y"),
-                 predicate       : object          = lambda d: True,
-                 must_be_listed  : bool            = False,
-                 preset_dates    : list[date]      = []
+                 accept_empty    : bool      = False,
+                 prefill_date_ISO: str       = date.today().strftime("%d%m%Y"),
+                 predicate       : object    = lambda d: True,
+                 must_be_listed  : bool      = False,
+                 preset_dates    : list[str] = []
                 ) -> None:
         super().__init__(prompt_name, accept_empty, prefill_date_ISO, 8)
         
@@ -1382,7 +1287,7 @@ class Date( Input ):
         return Point( dptr + (dptr >= 2) + (dptr >= 4), 0 )
     
     def transform(self) -> date:
-        return self.str_to_date( self.data )
+        return str_to_date( self.data )
     
     def forward_key(self, key: Key) -> None:
         match key:
@@ -1443,11 +1348,7 @@ class Date( Input ):
             ] + [ self.data ]
     
     def enter_via_enter(self) -> None:
-        super().enter_via_arrow( *(self.pos_input + self.cursor(len( self.string( self.data ) ))) )
-    
-    @staticmethod
-    def str_to_date( data_str:list[str] ) -> date:
-        return date.fromisoformat( '-'.join( [ Input.string(data_str[4:8]), Input.string(data_str[2:4]), Input.string(data_str[0:2]) ] ) )
+        super().enter_via_arrow( *(self.pos_input + self.cursor(len( stringify( self.data ) ))) )
 
 @LOGGER.remember_class
 class Value( Input ):
@@ -1475,26 +1376,11 @@ class Value( Input ):
         # assure prefill is a correctly float type formatted string
         prefill = float(prefill)
 
-        self.data = self.float_to_data_format( prefill, self.digit_count )
+        self.data = float_to_data_format( prefill, self.digit_count )
 
-    @staticmethod
-    def float_to_data_format( value:float, digit_count:tuple[int, int]) -> list[str]:
-        # if not value:
-        #     self.data = self.right_fill([])
-        #     return
-        
-        #? transform float to the needed str format, so that the user input can correctly be entered
-        #? { str(floor(prefill)) : PLACE_HOLDER > digit_count[0] s }         right fit pre-period digits with leading PLACE_HOLDER chars
-        #? { str( prefill - floor(prefill) )[2:] : 0 < digit_count[1] s }    left fit post-period digits with trailing zeros
-        #? str( round( prefill - floor(prefill), digit_count[1] ) )[2:]      string of the decimal part of the float, will always be leading with '0.', therefor slice string [2:]
-        #? round( prefill - floor(prefill), digit_count[1] )                 assure only digit_count[1] amount of digits after the period
-
-        digits     = ( str( floor(value) ), str( round( value - floor(value), digit_count[1] ) )[2:] )
-        format_str = ( "{:_>%ds}{:0<%ds}" % (digit_count[0], digit_count[1]) ).format( *digits )
-        return [ '' if ch == '_' else ch for ch in format_str ]
     
     def data_format_to_float_str(self) -> str:
-        return self.string( map( lambda ch: ch if ch else '0', ( *(self.data[:self.digit_count[0]]), '.', *(self.data[self.digit_count[0]:]) ) ) )
+        return stringify( map( lambda ch: ch if ch else '0', ( *(self.data[:self.digit_count[0]]), '.', *(self.data[self.digit_count[0]:]) ) ) )
     
     def render_foreground(self) -> None:
         Console.write_at( '.', self.digit_count[0], 0, False )
@@ -1502,7 +1388,7 @@ class Value( Input ):
         val = self.transform()
         
         if val:
-            self.data = self.float_to_data_format( val, self.digit_count )
+            self.data = float_to_data_format( val, self.digit_count )
         
         super().render_foreground()
     
@@ -1591,7 +1477,7 @@ class String( Input ):
                 super().forward_key(key)
      
     def enter_via_arrow(self, cursor_col:int, cursor_line:int) -> None:
-        super().enter_via_arrow( min( cursor_col, self.pos_input.col + len( self.string( self.data ) ) ), cursor_line )
+        super().enter_via_arrow( min( cursor_col, self.pos_input.col + len( stringify( self.data ) ) ), cursor_line )
 
 @LOGGER.remember_class
 class Name( String ):
@@ -1643,14 +1529,14 @@ class Name( String ):
                 super().forward_key(key)
     
     def transform(self) -> object:
-        return self.normalize( self.string(self.data) )
+        return self.normalize( stringify(self.data) )
     
     def init_selecting(self) -> None:
         if self.in_select_mode:
             return
         
         self.in_select_mode = True
-        self.select_prefix  = self.string(self.data)
+        self.select_prefix  = stringify(self.data)
         self.select_index   = -1
         
         prefix = self.canonicalize( self.select_prefix )
@@ -2342,7 +2228,6 @@ class Button_Manager( Interactable ):
             self._calc_and_set_positions()
 
             self._log_debug()
-            self.clear( force=True )
 
 
 @LOGGER.remember_class
@@ -2492,6 +2377,7 @@ class Confirm_yes_no( Confirmation, Button_Manager ):
 
 
 if __name__ == "__main__":
+    from dbHandler import DBSession
     Console.setup( "Focus Test" )
     Console.clear()
     Console.set_cursor( 0, 0 )
@@ -2558,39 +2444,39 @@ if __name__ == "__main__":
     # Console.set_cursor( 0, 2, False )
     
     # Testing Focus ===================================================================================================    
-    with Console.virtual_area( (0, 10), reset_cursor_on_exit=False ):
-        Console.write_line( "Testing Focus stuffs" )
-        FM = Manager(True, True).set_position_left_top( 4, 1 )
+    # with Console.virtual_area( (0, 10), reset_cursor_on_exit=False ):
+    #     Console.write_line( "Testing Focus stuffs" )
+    #     FM = Manager(True, True).set_position_left_top( 4, 1 )
         
-        # Test 1
-        # result = FM\
-        #     .append( String( "string", True ) )\
-        #     .append( Date  ( "Date"  , True ) )\
-        #     .append( Value ( "Value" , False, digit_count=(3, 3) ) )\
-        #     .append( Name  ( "Name"  , True,  preset_names=["Müller Heinz", "van der Linden Heinz Albert", "Günther Peter", "Fuchs Günther", "Maier-Schmidt Heinrich", "Müller-Schmidt Theodor", "Fuchs Peter", "Friedrich Horst"]) )\
+    #     # Test 1
+    #     # result = FM\
+    #     #     .append( String( "string", True ) )\
+    #     #     .append( Date  ( "Date"  , True ) )\
+    #     #     .append( Value ( "Value" , False, digit_count=(3, 3) ) )\
+    #     #     .append( Name  ( "Name"  , True,  preset_names=["Müller Heinz", "van der Linden Heinz Albert", "Günther Peter", "Fuchs Günther", "Maier-Schmidt Heinrich", "Müller-Schmidt Theodor", "Fuchs Peter", "Friedrich Horst"]) )\
         
-        # Test 2
-        FM.append( Date( "Datum", True, "", preset_dates=[d for d, *_ in SESSION.get_reading_all()] ) )
-        for i in range(COUNT_READING_ATTRIBUTES):
-            FM.append( Value( LIST_READING_ATTRIBUTE_NAMES[i], True, None, LIST_DIGIT_OBJ_LAYOUTS[i] ) )
-            FM.append_rule( 0, LIST_READING_ATTRIBUTE_NAMES[i], TX_func_factory.date_2_value(SESSION, i) )
+    #     # Test 2
+    #     FM.append( Date( "Datum", True, "", preset_dates=[d for d, *_ in SESSION.get_reading_all()] ) )
+    #     for i in range(COUNT_READING_ATTRIBUTES):
+    #         FM.append( Value( LIST_READING_ATTRIBUTE_NAMES[i], True, None, LIST_DIGIT_OBJ_LAYOUTS[i] ) )
+    #         FM.append_rule( 0, LIST_READING_ATTRIBUTE_NAMES[i], TX_func_factory.date_2_value(SESSION, i) )
         
-        FM.append( Button_Manager().append_auto(Button("Ja")).append_auto(Button("Nein")).finalize() )
-        FM.append( Select().append_name("Ja").append_name("Nein").finalize() )
-        FM.append( Select_yes_no() )
+    #     FM.append( Button_Manager().append_auto(Button("Ja")).append_auto(Button("Nein")).finalize() )
+    #     FM.append( Select().append_name("Ja").append_name("Nein").finalize() )
+    #     FM.append( Select_yes_no() )
         
-        # Test 3
-        # result = FM\
-        #     .append( String( "Name", False, "", 32 ) )\
-        #     .append( Date( "Date", False, "" ) )\
-        #     .append_tx_rx( 0, 1, TX_func_factory.name_2_dates(SESSION, 0) )\
-        #     #.append( Focus_Name( "Name", False, 32, True, [ n  for n, *_ in SESSION.get_person_all() if n ] ) )\
+    #     # Test 3
+    #     # result = FM\
+    #     #     .append( String( "Name", False, "", 32 ) )\
+    #     #     .append( Date( "Date", False, "" ) )\
+    #     #     .append_tx_rx( 0, 1, TX_func_factory.name_2_dates(SESSION, 0) )\
+    #     #     #.append( Focus_Name( "Name", False, 32, True, [ n  for n, *_ in SESSION.get_person_all() if n ] ) )\
         
-        result = FM.append( Confirm_simple_accept() ).join()
+    #     result = FM.append( Confirm_simple_accept() ).join()
         
-        Console.write_at( result.success, 1, 1, False )
-        Console.write_at( [*result], 4, 2, False )
-        Console.set_cursor( 0, 3, False )
+    #     Console.write_at( result.success, 1, 1, False )
+    #     Console.write_at( [*result], 4, 2, False )
+    #     Console.set_cursor( 0, 3, False )
     
     
     Console.stop()

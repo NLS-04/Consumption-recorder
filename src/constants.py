@@ -1,32 +1,30 @@
 from pathlib import Path
+from platformdirs import user_data_path, user_documents_path
+from tabulate import SEPARATING_LINE
 
-  ####################
- # RUNTIME DEPENDED #
-####################
-### PATH-ING ###
-PATH_ROOT = Path(__file__).parent
+IN_DEPLOYMENT_MODE: bool = Path(__file__).parent.name != "src"
+'''Flag to indicate whether the project was 'compiled' with Pyinstaller into a .exe or folder'''
 
-# Path to VERSION when executing .exe
+#-------------------------------------------------------------------------------
+# Runtime Dependent
+#-------------------------------------------------------------------------------
+#  Paths  #
+#---------#
+
+PATH_ROOT = Path(__file__).parent if IN_DEPLOYMENT_MODE else Path(__file__).parent.parent
+
 PATH_VERSION = PATH_ROOT.joinpath("VERSION")
-if not PATH_VERSION.exists():
-    # Path to VERSION when executing .py
-    PATH_VERSION = PATH_ROOT.parent.joinpath("VERSION")
+PATH_ICON    = PATH_ROOT.joinpath("rsc").joinpath("main.ico")
 
-# Path to ICON file when executing .exe
-PATH_ICON = PATH_ROOT.joinpath("rsc").joinpath("main.ico")
-if not PATH_ICON.exists():
-    # Path to ICON file when executing .py
-    PATH_ICON = PATH_ROOT.parent.joinpath("rsc").joinpath("main.ico")
+assert PATH_VERSION.exists() and PATH_ICON.exists(), "Path to resources could not be located"
 
 
-  ############################################
- # SETTABLE CONSTANTS | RUNTIME INDEPENDENT #
-############################################
-
+#-------------------------------------------------------------------------------
+# Settable Constance | Runtime Independent
+#-------------------------------------------------------------------------------
 APP_NAME   = "Consumption recorder"
 APP_AUTHOR = "github NLS-04"
 VERSION    = ( f := PATH_VERSION.open(), f.readline()[0:-1], f.close() )[1]
-
 
 TITLE =\
 rf"""
@@ -46,8 +44,6 @@ rf"""
 + ----------------------------------------------------------------------- +
 """
 
-from tabulate import SEPARATING_LINE
-
 MENUS = [
     [ "1)", "Ablesungen einsehen" ],
     [ "2)", "Personen   einsehen" ],
@@ -64,6 +60,7 @@ MENUS = [
     [ "9)", "Protokoll exportieren - PDF" ],
 ]
 
+
 KEYBOARD_SLEEP_TIME = 0.5
 
 # Digits-count (prePoint, postPoint)
@@ -79,25 +76,25 @@ LANGUANGE_CODE = "de-DE"
 DATE_STR_FORMAT = "%x"
 PLACE_HOLDER    = '_'
 
+
+# Data base specifics
+NAME_FILE_DB = "data.db"
+
 NAME_ELECTRICITY = "Strom"
 NAME_GAS         = "Gas"
 NAME_WATER       = "Wasser"
 
-LIST_READING_ATTRIBUTE_NAMES: list[str]             = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
-LIST_DIGIT_OBJ_LAYOUTS      : list[tuple[int, int]] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
-
 TABLE_HEADER_READINGS_SIMPLE = [ "Datum", NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
 TABLE_HEADER_PERSONS_SIMPLE  = [ "Name", "Einzugsdatum", "Auszugsdatum"]
 
+
+LIST_READING_ATTRIBUTE_NAMES: list[str] = [ NAME_ELECTRICITY, NAME_GAS, NAME_WATER ]
 # cspell:ignore Eintr Abls
 __TABLE_H_R_M_FORMAT = "{:^24s}\nExtrapolierter Verbrauch\npro Tag    pro Woche\nStandardabweichung p.Tag"
 __TABLE_H_R_D_FORMAT = "{:^17s}\nDelta/Tag   Delta"
 TABLE_HEADER_READINGS_DETAIL = [ "Datum\n      Delta", *[ __TABLE_H_R_D_FORMAT.format(obj) for obj in LIST_READING_ATTRIBUTE_NAMES ] ]
 TABLE_HEADER_READINGS_STATS  = [ "Jahr : Monat\nZeitspanne   Anz. Eintr.\nAblesungen\nTage zw. Abls.|std. Abw.", *[ __TABLE_H_R_M_FORMAT.format(obj) for obj in LIST_READING_ATTRIBUTE_NAMES ] ]
 TABLE_HEADER_PERSONS_DETAIL  = [ "Name", "Einzugsdatum", "Auszugsdatum", "Bewohnte Monate", "Voraussichtliche\nAbrechnungen" ]
-
-COUNT_READING_ATTRIBUTES = len( LIST_READING_ATTRIBUTE_NAMES )
-COUNT_DIGIT_OBJS         = len( LIST_DIGIT_OBJ_LAYOUTS )
 
 PDF_FONT_TABLE = "Courier"
 PDF_FONT_TITLE = "Courier-Bold"
@@ -108,6 +105,24 @@ SIZE_NAME = 32
 SIZE_DATE = 10
 
 NL = '\n'
+
+
+#--------------------------#
+#  Derived non-settable's  #
+#--------------------------#
+PATH_APPDATA = user_data_path( APP_NAME, APP_AUTHOR, roaming=False, ensure_exists=True )
+
+PATH_DB      = PATH_APPDATA.joinpath(NAME_FILE_DB)
+PATH_LOGS    = (PATH_APPDATA if IN_DEPLOYMENT_MODE else PATH_ROOT).joinpath("logs")
+PATH_PDF     = user_documents_path()
+
+
+LIST_DIGIT_OBJ_LAYOUTS: list[tuple[int, int]] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
+
+
+COUNT_READING_ATTRIBUTES = len( LIST_READING_ATTRIBUTE_NAMES )
+COUNT_DIGIT_OBJS         = len( LIST_DIGIT_OBJ_LAYOUTS )
+
 
 if __name__ == "__main__":
     print( *TABLE_HEADER_READINGS_DETAIL, sep=2*NL )
