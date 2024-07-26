@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+# cspell:disable
 
 
 block_cipher = None
@@ -10,9 +11,10 @@ a = Analysis(
     binaries=[],
     datas=[
         ('VERSION', '.'),
+        ('LICENSE', '.'),
         ('rsc\\main.ico', 'rsc'),
         ('src\\main.py', '.'),
-        ('src\\Focus_Frame.py', '.'),
+        ('src\\simpleTUI.py', '.'),
     ],
     hiddenimports=[
         "pynput.keyboard._win32",
