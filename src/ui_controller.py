@@ -417,7 +417,7 @@ def readings_tabulate_data(
     ---
     Args:
         months (`list[ Analyzed_year_month ]`): monthly grouped and statistically analyzed
-        stats  (`list[ model.Analyzed_year ] | Frame_statisticss`): if `use_years_for_stats_section`==`True` then yearly grouped and statistically analyzed else grouped and statistically analyzed
+        stats  (`list[ model.Analyzed_year ] | Frame_statistics`): if `use_years_for_stats_section`==`True` then yearly grouped and statistically analyzed else grouped and statistically analyzed
         use_years_for_stats_section (`bool`, optional): if `True` groups readings in `Table 2` by year and months, `False` groups only by months. Defaults to `True`.
         tablefmt (`str`, optional): table format to be used by the `tabulate` module. Defaults to "grid".
 

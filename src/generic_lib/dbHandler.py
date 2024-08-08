@@ -20,7 +20,7 @@ class Reading():
         assert len(self.attributes) == attribute_count, f"length of attributes = {len(self.attributes)} is not equal to {attribute_count}"
         assert all( map(lambda x: isinstance(x, (float, int, type(None))), self.attributes ) ), "some attributes are not of type float | int | None"
 
-@dataclass(slots=True)
+@dataclass(slots=True, unsafe_hash=True)
 class Person:
     name: str
     move_in : datetime.date | None = None

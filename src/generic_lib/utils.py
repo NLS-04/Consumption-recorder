@@ -1,5 +1,20 @@
-from datetime import date
+from __future__ import annotations
+
+from enum        import Enum, auto
+from typing      import NamedTuple, TypeVar, Generic, Iterable
+
+from datetime import date, timedelta
 from math     import floor
+
+
+T = TypeVar("T")
+
+
+def prod( iterable:Iterable[T], /, start:int=0 ) -> T:
+    out = 1.0
+    for x in iterable[start:]:
+        out *= x
+    return out
 
 
 def get_string_dimensions( s:str ) -> tuple[int, int]:
@@ -39,6 +54,177 @@ def max_width_of_strings( list_of_str:list[str] ) -> tuple[str, int]:
     
     return res, len(res)
 
+def replace_substring( string_to_be_overwritten:str, at_index:int, substring:str ) -> str:
+    assert 0 <= at_index, "at_index must be non negative"
+    assert at_index < len(string_to_be_overwritten) - len(substring), "substring does not fit at the supplied index"
+    
+    return string_to_be_overwritten[:at_index] + substring + string_to_be_overwritten[at_index+len(substring):]
+
+stats_t = NamedTuple( "stats_t", [("mean", float), ("median", T), ("variance", float)] )
+def simple_statistics( data:list[T] ) -> stats_t[T]:
+    N = len(data)
+    
+    if N == 0:
+        return stats_t( 0, 0, 0 )
+    
+    return stats_t(
+        mean   := sum( data ) / N,
+        median := data[ N//2 ] if N % 2 == 1 else 0.5*(data[ N//2-1 ] + data[ N//2 ]),
+        var    := sum( map( lambda x: (x-mean)**2, data) ) / N
+    )
+    # mean = (x0 + x1)/2
+    # var  = ( (x0-mean)**2 + (x1-mean)**2 ) / 2
+    #      = (x0**2 + x1**2) / 2 - 3/4 * (x0 + x1)**2
+def geometric_mean( data:Iterable[T] ) -> T:
+    if len(data) == 0:
+        return 1
+    
+    return prod( data ) ** (1/len(data))
+
+
+def end_of_month_date( _date: date ) -> date:
+    return (date( _date.year, _date.month+1, 1 ) if _date.month < 12 else date( _date.year+1, 1, 1 )) - timedelta( days=1 )
+
+class Intersection(Enum):
+    """
+    Type of intersection between to ranges etc.
+
+    For two ranges A and B and (the pseudocall) `A.intersect(B)`: 
+    The returned intersection type is always read left to right i.e. `A <relative to> B`.
+    
+    meaning that the type:
+    - `Intersection.SUB_SET` <=> A is SUB_SET of B;
+    
+    and vice-versa
+    - `Intersection.SUPER_SET` <=> A is SUPER_SET of B
+    """
+    
+    DISJOINT  = 0
+    EQUAL     = 1
+    SUB_SET   = 2
+    SUPER_SET = 3
+    
+    PARTIAL_OVERLAP_LEFT  = 4
+    PARTIAL_OVERLAP_RIGHT = 5
+
+div_t = NamedTuple("div_t", [("quotient", int), ("remainder", int)])
+calender_t = NamedTuple( "calender_t", [("days", int), ("months", int), ("years", int)] )
+class Dates_Delta:
+    DAYS_IN_YEAR : float = 365.25
+    DAYS_IN_MONTH: float = DAYS_IN_YEAR / 12.0
+    
+    date_low : date
+    date_high: date
+    
+    days  : int
+    months: float
+    years : float
+    
+    as_months_days: div_t
+
+    as_years_days       : div_t
+    as_years_months     : div_t
+    as_years_months_days: calender_t
+    
+    
+    def __init__(self, date_low: date, date_high: date) -> None:
+        self.date_low  = date_low
+        self.date_high = date_high
+        
+        self.days = (self.date_high - self.date_low).days
+
+        self.months         = self.days_to_months( self.days )
+        self.as_months_days = self.days_to_months_days( self.days )
+
+        self.years                = self.days_to_years( self.days )
+        self.as_years_days        = self.days_to_years_days( self.days )
+        self.as_years_months      = self.days_to_years_months( self.days )
+        self.as_years_months_days = self.days_to_years_months_days( self.days )
+    
+    def intersect( self, date_range: Dates_Delta ) -> Intersection:
+        if date_range.date_low == self.date_low and date_range.date_high == self.date_high:
+            return Intersection.EQUAL
+        
+        if date_range.date_low < self.date_low:
+            # possible intersection => SUB_SET or DISJOINT or PARTIAL_LEFT
+            
+            if date_range.date_high < self.date_low:
+                return Intersection.DISJOINT
+            
+            if date_range.date_high >= self.date_high:
+                return Intersection.SUB_SET
+            
+            return Intersection.PARTIAL_OVERLAP_LEFT
+            
+        else: # date_range.date_low >= self.date_low
+            # possible intersection => SUPER_SET or DISJOINT or PARTIAL_RIGHT or EQUAL
+            
+            if date_range.date_low > self.date_high:
+                return Intersection.DISJOINT
+            
+            if date_range.date_high > self.date_high:
+                return Intersection.PARTIAL_OVERLAP_RIGHT
+            
+            return Intersection.SUPER_SET
+
+    
+    def is_in_delta( self, date_to_check:date ) -> int:
+        """
+        check whether a date is inside, earlier or later than this date_delta
+
+        Args:
+            date_to_check (`date`): date to check against this date_delta
+
+        Returns:
+            - `-1` => date is earlier than the delta
+            - ` 0` => date is in between the delta
+            - `+1` => date is later than the delta
+        """
+
+        if date_to_check < self.date_low:
+            return -1
+        
+        if date_to_check > self.date_high:
+            return 1
+        
+        return 0
+    
+    
+    @classmethod
+    def days_to_months( cls, days: int ) -> float:
+        return days / cls.DAYS_IN_MONTH
+    @classmethod
+    def days_to_months_days( cls, days: int ) -> div_t:
+        return cls.__int_divmod( days, cls.DAYS_IN_MONTH )
+    
+    @classmethod
+    def days_to_years( cls, days: int ) -> float:
+        return days / cls.DAYS_IN_YEAR
+    @classmethod
+    def days_to_years_days( cls, days: int ) -> div_t:
+        return cls.__int_divmod( days, cls.DAYS_IN_YEAR )
+    @classmethod
+    def days_to_years_months( cls, days: int ) -> div_t:
+        years , ydays = cls.days_to_years_days( days )
+        months = round( cls.days_to_months( ydays ) )
+        
+        return div_t( years, months )
+    @classmethod
+    def days_to_years_months_days( cls, days: int ) -> calender_t:
+        years , ydays = cls.days_to_years_days( days )
+        months, mdays = cls.days_to_months_days( ydays )
+        
+        return calender_t( mdays, months, years )
+    
+    def __str__(self) -> str:
+        return f"DD( {str(self.date_low)}, {str(self.date_high)} )"
+    
+    @staticmethod
+    def __to_int( *args ) -> list[int]:
+        return [ int(x) for x in args ]
+    @staticmethod
+    def __int_divmod( x, y ) -> div_t:
+        return div_t( *[ int(v) for v in divmod( x, y ) ] )
 
 #-----------------#
 #  Serialization  #
