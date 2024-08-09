@@ -10,12 +10,23 @@ from math     import floor
 T = TypeVar("T")
 
 
+#-----------#
+#  generic  #
+#-----------#
+
 def prod( iterable:Iterable[T], /, start:int=0 ) -> T:
     out = 1.0
     for x in iterable[start:]:
         out *= x
     return out
 
+def digit_layout_to_format_specifier( digit_layout:tuple[int, int] ) -> str:
+    return f"{sum(digit_layout)}.{digit_layout[1]}f"
+
+
+#-----------------------#
+#  string manipulation  #
+#-----------------------#
 
 def get_string_dimensions( s:str ) -> tuple[int, int]:
     # cspell:ignore nccc nddd
@@ -60,6 +71,11 @@ def replace_substring( string_to_be_overwritten:str, at_index:int, substring:str
     
     return string_to_be_overwritten[:at_index] + substring + string_to_be_overwritten[at_index+len(substring):]
 
+
+#--------------#
+#  statistics  #
+#--------------#
+
 stats_t = NamedTuple( "stats_t", [("mean", float), ("median", T), ("variance", float)] )
 def simple_statistics( data:list[T] ) -> stats_t[T]:
     N = len(data)
@@ -72,15 +88,16 @@ def simple_statistics( data:list[T] ) -> stats_t[T]:
         median := data[ N//2 ] if N % 2 == 1 else 0.5*(data[ N//2-1 ] + data[ N//2 ]),
         var    := sum( map( lambda x: (x-mean)**2, data) ) / N
     )
-    # mean = (x0 + x1)/2
-    # var  = ( (x0-mean)**2 + (x1-mean)**2 ) / 2
-    #      = (x0**2 + x1**2) / 2 - 3/4 * (x0 + x1)**2
 def geometric_mean( data:Iterable[T] ) -> T:
     if len(data) == 0:
         return 1
     
     return prod( data ) ** (1/len(data))
 
+
+#------------------------#
+#  Intersection & Dates  #
+#------------------------#
 
 def end_of_month_date( _date: date ) -> date:
     return (date( _date.year, _date.month+1, 1 ) if _date.month < 12 else date( _date.year+1, 1, 1 )) - timedelta( days=1 )
@@ -225,6 +242,7 @@ class Dates_Delta:
     @staticmethod
     def __int_divmod( x, y ) -> div_t:
         return div_t( *[ int(v) for v in divmod( x, y ) ] )
+
 
 #-----------------#
 #  Serialization  #
