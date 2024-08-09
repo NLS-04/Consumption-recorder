@@ -1,6 +1,6 @@
 from __future__      import annotations
 from collections.abc import Mapping
-from typing          import Self, Protocol, Callable, Sequence, Optional, \
+from typing          import Self, Protocol, Callable, Sequence, Optional, Literal,\
                             TypeVar, Final, final, runtime_checkable, overload, Any
 
 from enum     import Enum, auto
@@ -491,8 +491,8 @@ class Manager():
         set these instructions *after* at least the `transceiver` and `receiver` `Focus_Input` objects are appended to the `Focus_Manager`
 
         Args:
-            receiver (`int`|`str`): index or prompt title name of the receiving focus
             transceiver (`int`|`str`): index or prompt title name of the transceiving focus
+            receiver (`int`|`str`): index or prompt title name of the receiving focus
             tx_transform_function (`(list[str]) -> tuple[bool, list[str]]`): takes the backend data (the `list`[`str`]) as parameter and should return a `tuple`[should_send:`bool`, transformed_data_for_receiver:`list`[`str`] ]
 
         Returns:
@@ -873,19 +873,13 @@ class Plain_Text( Frame ):
             self.text = fill( self.text, force_width )
         
         self.bounding = Point( max_width_of_strings( self.text.splitlines() )[1]-1, len(self.text.splitlines())-1 )
-        
-        LOGGER.debug( f"new Plain_Text with bounding {str(self.bounding)}" )
     
     def render(self) -> None:
         Console.write_in( self.text, *self.position, *self.bounding )
     
     def set_position(self, pos:tuple[int, int], bound:Optional[tuple[int,int]]=None) -> None:
-        before_pos_bound = self.position, self.bounding
         super().set_position( pos, bound )
         self = Plain_Text( self.text, force_width=self.get_dimensions()[0] )
-        
-        LOGGER.debug( "repositioned Plain_Text: [pos=(%3d, %3d), bound=(%3d, %3d)] -> [pos=(%3d, %3d), bound=(%3d, %3d)]", *before_pos_bound[0], *before_pos_bound[1], *self.position, *self.bounding )
-
 
 #---------------------#
 # Interactable Frames #
@@ -1241,6 +1235,9 @@ class Date( Input ):
     #? data:layout   = 'ddmmyyyy'
     #?     :indexing    01234567
     
+    DELIMITER  : Final[str] = '.'
+    DATE_FORMAT: str        = "%d%m%Y"
+    
     in_select_mode: bool
     select_index  : int
     select_dates  : list[date]
@@ -1253,7 +1250,7 @@ class Date( Input ):
                  self,
                  prompt_name     : str,
                  accept_empty    : bool      = False,
-                 prefill_date_ISO: str       = date.today().strftime("%d%m%Y"),
+                 prefill_date_ISO: str       = date.today().strftime(DATE_FORMAT),
                  predicate       : object    = lambda d: True,
                  must_be_listed  : bool      = False,
                  preset_dates    : list[str] = []
@@ -1273,8 +1270,8 @@ class Date( Input ):
         self.dates = preset_dates
     
     def render_foreground(self) -> None:
-        Console.write_at( '.', 2, 0, False )
-        Console.write_at( '.', 5, 0, False )
+        Console.write_at( self.DELIMITER, 2, 0, False )
+        Console.write_at( self.DELIMITER, 5, 0, False )
         
         super().render_foreground()
     
@@ -1336,13 +1333,129 @@ class Date( Input ):
         # e.g:  user writes: __.12.___
         #       select all dates from the preset_dates list that are in December
         self.select_dates = [
-            list( d.strftime("%d%m%Y") )
+            list( d.strftime( self.DATE_FORMAT ) )
             for d 
             in self.dates
             if all(
-                    map(
-                        lambda chrs: chrs[0] == chrs[1] or not chrs[1],
-                        zip( list(d.strftime("%d%m%Y")), self.data )
+                    map( # skip empty characters of self.data or compare the characters of a pair
+                        lambda chrs: chrs[0] == chrs[1] or not chrs[1], 
+                        zip( list(d.strftime( self.DATE_FORMAT )), self.data ) # pair up all characters of d and self.data
+                    )
+                )
+            ] + [ self.data ]
+    
+    def enter_via_enter(self) -> None:
+        super().enter_via_arrow( *(self.pos_input + self.cursor(len( stringify( self.data ) ))) )
+
+@LOGGER.remember_class
+class Date_no_day( Input ):
+    #? data:layout   = 'mmyyyy'
+    #?     :indexing    012345
+    
+    DELIMITER  : Final[str] = '.'
+    DATE_FORMAT: str        = "%m%Y"
+    
+    in_select_mode: bool
+    select_index  : int
+    select_dates  : list[date]
+
+    must_be_listed: bool
+    
+    dates: list[str]
+    
+    def __init__(
+                 self,
+                 prompt_name     : str,
+                 accept_empty    : bool      = False,
+                 prefill_date_ISO: str       = date.today().strftime(DATE_FORMAT),
+                 predicate       : object    = lambda d: True,
+                 must_be_listed  : bool      = False,
+                 preset_dates    : list[str] = []
+                ) -> None:
+        super().__init__(prompt_name, accept_empty, prefill_date_ISO, 6)
+        
+        self.in_select_mode = False
+        self.select_index   = -1
+        self.select_dates   = []
+        
+        if must_be_listed:
+            self.predicate = lambda x: predicate(x) and x in self.dates
+        else:
+            self.predicate = predicate
+        
+        self.must_be_listed = must_be_listed
+        self.dates = preset_dates
+    
+    def render_foreground(self) -> None:
+        Console.write_at( self.DELIMITER, 2, 0, False )
+        
+        super().render_foreground()
+    
+    def cursor(self, override_data_ptr:Optional[int]=None, get_max_position:bool=False) -> Point[int]:
+        dptr = override_data_ptr if override_data_ptr is not None else self.data_ptr
+        
+        if get_max_position:
+            return Point( 7, 0 )
+        
+        return Point( dptr + int(dptr >= 2), 0 )
+    
+    def transform(self) -> date:
+        return str_to_date( ['0', '1'] + self.data )
+    
+    def forward_key(self, key: Key) -> None:
+        match key:
+            # Guards
+            case Key( np=None, an=ch ) if not ch.isdigit():
+                return
+            case Key( np=keyboard.Key.space ):
+                return
+            
+            # tab selecting case
+            case Key( np=keyboard.Key.tab, mods=[] | [keyboard.Key.shift] ) if self.dates:
+                self.init_selecting()
+            
+                self.select_index += -1 if keyboard.Key.shift in key.get_modifiers() else 1
+
+                self.select_index = ( len(self.select_dates) + self.select_index ) % len(self.select_dates)
+                
+                self.data = self.select_dates[self.select_index]
+                self.enter_via_enter() # set cursor to the right position of the selected name
+
+                # is select_index at the original user input
+                if self.select_index == len(self.select_dates)-1:
+                    Register.revert(self)
+                    return
+                
+                Register.transceive(self)
+            
+            case Key( np=None, an=ch ) if ch.isdigit():
+                self.in_select_mode = False
+                super().forward_key( key )
+                
+            case _:
+                self.in_select_mode = False
+                super().forward_key( key )
+    
+    def init_selecting(self) -> None:
+        LOGGER.debug( f"in select mode: {self.in_select_mode}" )
+        if self.in_select_mode:
+            return
+        
+        self.in_select_mode = True
+        self.select_index   = -1
+        
+        
+        # select all dates that have the same digits at the same locations like the user pre-typed input
+        # e.g:  user writes: __.12.___
+        #       select all dates from the preset_dates list that are in December
+        self.select_dates = [
+            list( d.strftime( self.DATE_FORMAT ) )
+            for d 
+            in self.dates
+            if all(
+                    map( # skip empty characters of self.data or compare the characters of a pair
+                        lambda chrs: chrs[0] == chrs[1] or not chrs[1], 
+                        zip( list(d.strftime( self.DATE_FORMAT )), self.data ) # pair up all characters of d and self.data
                     )
                 )
             ] + [ self.data ]

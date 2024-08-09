@@ -1,7 +1,7 @@
 from tabulate import tabulate, SEPARATING_LINE
 from datetime import date
 from textwrap import indent
-from typing   import Callable, Optional, Generic, TypeVar
+from typing   import Callable, Optional, Generic, TypeVar, Final
 from locale   import setlocale, LC_ALL
 
 # Custom packages
@@ -10,13 +10,14 @@ from generic_lib.consoleIO import Console, Key, keyboard
 from generic_lib.utils     import *
 from constants             import *
 
+import backend_model as model
 import dbWrapper     as db
 import ui_controller as ctrl
 import formatter     as fmt
 import pdf_gen       as pdf
 
 from generic_lib.simpleTUI import Result, Register
-from generic_lib.simpleTUI import Manager, Name, Date, Value, Plain_Text
+from generic_lib.simpleTUI import Manager, Name, Date, Date_no_day, Value, Plain_Text
 from generic_lib.simpleTUI import Button_Manager, Button, Confirm_yes_no
 
 
@@ -36,15 +37,15 @@ from generic_lib.simpleTUI import Button_Manager, Button, Confirm_yes_no
 #! TODO visualize_reading:           add pyplot plots of consumption rates over time
 #! TODO export_to_pdf:               add pyplot plots of consumption rates over time
 #! TODO ...:                         auto-loading values for edit don't load when first entering Frame Manager, only after making an input do all interactables update
-#! TODO logging:                     put logs folder at the location of the database.
+#!// TODO logging:                     put logs folder at the location of the database.
 
+# TODO do_invoice:                  complete invoice
 # TODO ...:                         refactor all comments/docs: reading values like gas or water are to be called reading-attributes
 # TODO visualize_reading:           add predictions for the upcoming invoice's compensation payment
-# TODO do_invoice:                  complete invoice
-# TODO manage_interactables:        ? maybe take this out of this function and let the user choose their own Confirm Frame
 # TODO ...:                         add better descriptions to all menu/interaction pages
 # TODO ...:                         de-hard-code main.py by making Console.write_line str's to constant variables and move them to constants.py
 # TODO .spec                        add version-resource-file to .spec
+# TODO manage_interactables:        ? maybe take this out of this function and let the user choose their own Confirm Frame
 
 #--------#
 # gui.py #
@@ -57,8 +58,7 @@ from generic_lib.simpleTUI import Button_Manager, Button, Confirm_yes_no
 #------#
 # MISC #
 #------#
-#! TODO main.py      separate code chunks into own specified files
-# TODO logging:      refactor logging for all files
+#// TODO logging:      refactor logging for all files
 #// TODO dbHandler.py: add better typing support
 
 
@@ -221,10 +221,49 @@ def delete_person():
 
 
 def do_invoice():
-    Console.write_line( " --- ABRECHNUNG DURCHFÜHREN --- ", NL )
+    Console.write_line( " --- ABRECHNUNG ERSTELLEN --- ", NL )
     #todo: better description
+    #todo: refactor?
     
-    Console.write_line( "INOP", NL )
+    FM = Manager(True, True).set_position_left_top( SIZE_TAB, 2 )
+    
+    result: Result = FM\
+        .append( Date_no_day( "Rechnungsbeginn",False, "" ) )\
+        .append( Date_no_day( "Rechnungsende", False, "", lambda dat: dat >= Register.get(0) ) )\
+        .append( Value( f"Gesamtkosten in {LOCAL_CURRENCY}", False, None, DIGIT_LAYOUT_MONEY ) )\
+        .join()
+    
+    if not result.success:
+        user_decline_prompt()
+        return 
+    
+    date_start: date
+    date_end  : date
+    costs     : float
+    date_start, date_end, costs = result
+    
+    
+    invoice = model.Invoice( date_start, end_of_month_date( date_end ), costs )
+    distribution = invoice.get_invoice()
+    
+    distributed_sum = sum( (round(c,2) for _, c in distribution) )
+    delta_costs = costs - distributed_sum
+    
+    table_data = [[p.name, c, LOCAL_CURRENCY] for p, c in distribution]\
+                 + [ SEPARATING_LINE, 
+                     ["Summe", distributed_sum, LOCAL_CURRENCY], 
+                     ["Ungedeckte Kosten" if delta_costs >= 0 else "Überverteilte Kosten", delta_costs, LOCAL_CURRENCY]
+                    ]
+    
+    table = tabulate( table_data, headers=["Personen", "Kosten", "€"], tablefmt="simple", floatfmt=digit_layout_to_format_specifier(DIGIT_LAYOUT_MONEY) )
+    viz = invoice.get_visualization( 100, Console.get_console_size()[0] )
+    viz_width = max_width_of_strings(viz.splitlines())[1]
+    
+    Console.clear()
+    Console.write_line( " --- ABRECHNUNG ERSTELLEN --- ", NL )
+    Console.write_line( "Kosten verteilen sich wie folgt:".center( viz_width ) )
+    Console.write_line( *[ t.center( viz_width ) for t in table.splitlines() ], sep="\n" )
+    Console.write_line( viz )
 
 def do_analyze():
     Console.write_at( "Manuelle Analyse der Ablesungen über einen Zeitraum (Grenzen des Zeitraums sind inklusiv)", 0, 0 )

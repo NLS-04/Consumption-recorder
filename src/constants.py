@@ -54,9 +54,8 @@ MENUS = [
     [ "5)", "Ablesungen entfernen" ],
     [ "6)", "Personen   entfernen" ],
     SEPARATING_LINE,
-    # [ "7)", "Jahresabrechnung erstellen" ],
-    [ "7)", "INOP - (Jahresabrechnung erstellen)" ],
-    [ "8)", "Analyse - manuell" ],
+    [ "7)", "Kostenabrechnung erstellen" ],
+    [ "8)", "Zeitraumanalyse - manuell" ],
     [ "9)", "Protokoll exportieren - PDF" ],
 ]
 
@@ -68,9 +67,11 @@ DIGIT_LAYOUT_ELECTRICITY = ( 6, 1 )
 DIGIT_LAYOUT_GAS         = ( 5, 3 )
 DIGIT_LAYOUT_WATER       = ( 5, 3 )
 DIGIT_LAYOUT_DELTA       = ( 2, 3 )
+DIGIT_LAYOUT_MONEY       = ( 6, 2 )
 
 # see for further language codes: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/a9eac961-e77d-41a6-90a5-ce1a8b0cdb9c?redirectedfrom=MSDN
 LANGUANGE_CODE = "de-DE"
+LOCAL_CURRENCY = '€'
 
 # DATE_STR_FORMAT = "%d.%m.%Y"
 DATE_STR_FORMAT = "%x"
