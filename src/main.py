@@ -39,18 +39,19 @@ from generic_lib.simpleTUI import Button_Manager, Button, Confirm_yes_no
 #! TODO ...:                         auto-loading values for edit don't load when first entering Frame Manager, only after making an input do all interactables update
 #!// TODO logging:                     put logs folder at the location of the database.
 
-# TODO do_invoice:                  complete invoice
+#// TODO do_invoice:                  complete invoice
 # TODO ...:                         refactor all comments/docs: reading values like gas or water are to be called reading-attributes
 # TODO visualize_reading:           add predictions for the upcoming invoice's compensation payment
 # TODO ...:                         add better descriptions to all menu/interaction pages
 # TODO ...:                         de-hard-code main.py by making Console.write_line str's to constant variables and move them to constants.py
 # TODO .spec                        add version-resource-file to .spec
-# TODO manage_interactables:        ? maybe take this out of this function and let the user choose their own Confirm Frame
+# TODO manage_interactables:        (Low Prio) ? maybe take this out of this function and let the user choose their own Confirm Frame
 
 #--------#
 # gui.py #
 #--------#
 #! TODO Console: add option to suppress ctrl-c inputs or to raise an KeyboardInterrupt Exception if not suppressed and pressed
+#! TODO Console: add ANSI coloring esc codes
 # TODO Key:     integrate pynput.keyboard into Key class
 # TODO Console: expect ANSI codes to not work properly, assume that it needs refinement in the future when adding fancy ESC styling
 # TODO Console: add icon to terminal window

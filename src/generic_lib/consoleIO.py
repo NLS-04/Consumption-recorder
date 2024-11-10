@@ -1,17 +1,178 @@
 from   __future__ import annotations
+from   typing     import Optional, Sequence, overload, Self, ClassVar
+from   time       import sleep, time
+import re
 
-from   typing import Optional, Sequence, overload
-
-from   time import time
+from enum import Enum
 
 import sys
 from   contextlib import contextmanager, _GeneratorContextManager
+
+try:
+    from colors import *
+except ImportError:
+    def is_string(obj)                        : return isinstance( obj, str )
+    def color(s, fg=None, bg=None, style=None): return s
+    def strip_color(s)                        : return s
+    def ansilen(s)                            : return len(s)
+    COLORS = []
+    STYLES = []
+
+    
+    print( "ansicolor is currently not installed" )
+    print( "Ansicoloring is now deactivated" )
+    print( "consider installing ansicolor via pip:" )
+    print( "    pip install ansicolors" )
+    print()
+
 
 import console.detection
 import console.utils
 from   console.screen import sc, Screen
 
 import pynput.keyboard as keyboard
+
+
+class STYLE_TYPE( Enum ):
+    none      = 'none'
+    bold      = 'bold'
+    faint     = 'faint'
+    italic    = 'italic'
+    underline = 'underline'
+    blink     = 'blink'
+    blink2    = 'blink2'
+    negative  = 'negative'
+    concealed = 'concealed'
+    crossed   = 'crossed'
+class Style:
+    """
+    colorize and stylize text with ansi escape codes
+
+    Features the ability to handle encapsulated stylized strings correctly
+    
+    Example:
+    >>> blue_Black = Style( "blue", "#000000" )
+    >>> red_underline = Style( "red", styles=STYLE_TYPE.underline )
+    >>> text = "normal " + blue_Black.apply( "blue, ", red_underline.apply("red, "), "blue again, " ) + "normal again"
+    >>> Console.write( text )
+    """
+    _colors_regex: ClassVar[re.Pattern] = re.compile( r"((\x1b|\033)\[\d{1,3}(;\d{1,3})*m)[\s\S]+?((\x1b|\033)\[0m)" )
+    _csi_regex   : ClassVar[re.Pattern] = re.compile( r"\x1b\[(K|.*?m)" )
+
+    csi_reset : ClassVar[str] = "\x1b[0m"
+    csi_format: str
+    
+    @staticmethod
+    def default() -> Style:
+        """default Style, i.e. the ansi code which does unset all styles and colors and sets the terminals default"""
+        return Style(styles=STYLE_TYPE.none)
+    
+    
+    def __init__(self, fg:int|str=None, bg:int|str=None, styles:STYLE_TYPE|list[STYLE_TYPE]=None):
+        """
+        create a style of a foreground and background color and special style type
+
+        colors can be either:
+        - an `int` as an index into the terminals (3-bit/8-bit) color palette; or
+        - a 24-bit RGB color of the format `#RRGGBB`
+
+        Args:
+            fg (`int | str`, optional): foreground color. Defaults to the terminals default color.
+            bg (`int | str`, optional): background color. Defaults to the terminals default color.
+            styles (`STYLE_TYPE | list[STYLE_TYPE]`, optional): combination or none special effects/styles. Defaults to no style.
+        """
+        # https://en.wikipedia.org/wiki/ANSI_escape_code#Colors
+        self.csi_format = Style.csi_code( fg, bg, styles, True )
+    
+    def apply(self, *strings:str, sep:str=' ') -> str:
+        """
+        applies the coloring and stylizing to a set of strings.
+
+        style codes inside the supplied strings are detected and correctly encoded
+        in the surrounding style
+
+        Returns:
+            `str`: a stylized string of the supplied strings
+        """
+        text = sep.join( map( str, strings ) )
+        
+        formatted_text = text
+        
+        for match in Style._colors_regex.finditer( text ):
+            # not yet optimized; necessary?
+            formatted_text = text.replace( match.group(), match.group()[:-4] + self.csi_format, 1 )
+        
+        return self.csi_format + formatted_text + Style.csi_reset
+    
+    @staticmethod
+    def csi_code( fg:int|str=None, bg:int|str=None, styles:STYLE_TYPE|list[STYLE_TYPE]=None, force_clean:bool=False ) -> str:
+        """
+        Generates the escape code sequence for the specified styling and color scheme
+
+        the generated escape sequence can directly be written to the terminal
+
+        Args:
+            fg (`int | str`, optional): foreground color. Defaults to the default foreground color.
+            bg (`int | str`, optional): background color. Defaults to the default background color.
+            styles (`str`, optional): selection of styles of `STYLES`. Defaults to no style.
+            force_clean (`bool`, optional): put a reset csi code before the formatted csi, to force a clean csi formatting.
+
+        Raises:
+            ValueError: if any of the supplied `styles` is not equal to one of the predefined `STYLES`
+
+        Returns:
+            `str`: escape code sequence to be printed to the terminal
+        """
+        sty: str = None
+        
+        if   isinstance( styles, STYLE_TYPE ): sty = styles.value
+        elif isinstance( styles, list ):  sty = '+'.join( [ s.value for s in styles ] )
+        else:                             sty = styles
+        
+        escaped = color( "", fg, bg, sty )
+        
+        # add reset code to csi code
+        if force_clean:
+            # csi already contains reset code
+            if escaped[:3] == "\x1b[0":
+                return escaped
+            else:
+                escaped = escaped[:2] + "0;" + escaped[2:]
+        
+        # color adds a reset escape sequence of 4 bytes at the end, which we remove
+        return escaped[ :-4 ]
+
+    @staticmethod
+    def truncate_printable( color_coded_text:str, printable_width:int ) -> str:
+        """
+        truncate a string with style codes to a given width of printable characters
+
+        useful to truncate a stylized text to fit in a given width in the terminal
+
+        Args:
+            color_coded_text (`str`): (stylized) string to be truncated
+            printable_width (`int`): width to be filled with printable characters
+
+        Returns:
+            `str`: stylized truncated string
+        """
+        printable_text:str = Style._csi_regex.sub( '', color_coded_text )
+        
+        if len(printable_text) <= printable_width:
+            return color_coded_text
+        
+        out_str = printable_text[:printable_width]
+        matches = list( Style._csi_regex.finditer( color_coded_text ) )
+        
+        width_add = 0
+        for m in matches:
+            if m.start() > printable_width + width_add:
+                break
+            
+            out_str = out_str[:m.start()] + m.group() + out_str[m.start():]
+            width_add += len( m.group() )
+        
+        return out_str
 
 
 # TODO Key: add ctrl+'alphabetic' since they are not nicely recognized
@@ -394,13 +555,15 @@ class Key():
             and ( k._modifiers.issubset( self._modifiers ) )    # self.modifiers must contain (at least) all of k.modifiers
 
 class Console():
-    __listener: keyboard.Listener = None
+    __listener: ClassVar[ keyboard.Listener ] = None
     
-    __is_virtual   : bool = False
-    __virtual_depth: int  = 0
+    __is_virtual   : ClassVar[ bool ] = False
+    __virtual_depth: ClassVar[ int  ] = 0
     
-    __screen_lt: tuple[int, int] = (0, 0)
-    __screen_rb: tuple[int, int] = None
+    __screen_lt: ClassVar[ tuple[int, int] ] = (0, 0)
+    __screen_rb: ClassVar[ tuple[int, int] ] = None
+    
+    __applied_style: ClassVar[ Style ] = Style.default
     
     @classmethod
     def setup(cls, title:Optional[str]=None) -> None:
@@ -414,26 +577,43 @@ class Console():
         cls.__screen_lt = (0, 0)
         cls.__screen_rb = cls.get_console_size()
         
+        cls.__applied_style = Style.default
+        
         cls.__listener = keyboard.Listener(
             on_press=Key.press,
             on_release=Key.release
         )
         cls.__listener.start()
         cls.__listener.wait()
+        
+        cls.rest_style()
     
     @classmethod
     def stop(cls) -> None:
         """ call stop after using the Console """
+        cls.rest_style()
         cls.__listener.stop()
         cls.show_cursor()
     
     
+    #---------------------#
+    #  Writing functions  #
+    #---------------------#
     @classmethod
     def write(cls, *args:object, sep:str=" ") -> None:
         """ writes to terminal at current cursor position """
         
-        str_args = sep.join( map(str, args) )
+        if cls.__applied_style.csi_format != Style.csi_reset:
+            str_args = cls.__applied_style.apply( *args, sep=sep )
+        else:
+            str_args = sep.join( map(str, args) )
+        
         arg_lines = str_args.splitlines()
+        
+        if not cls.__is_virtual: # simply use stdout
+            cls.__stdout( str_args, True )
+            return
+        
         
         # normally '\n' at the beginning of a string will be kept
         # if str_args.startswith('\n'):
@@ -442,34 +622,36 @@ class Console():
         if str_args.endswith('\n'):
             arg_lines += ['']
         
-        if not cls.__is_virtual: # simply use stdout
-            for line in arg_lines:
-                cls.__stdout( line + '\n' )
-            return
-        
-        
         width, height = cls.get_console_size()
         for i, line in enumerate(arg_lines):
-            buffer = line
+            line_buffer = line
             
             while True:
-                cls.__stdout( buffer[:width-cls.get_cursor()[0]] )
+                avail_width = width - cls.get_cursor()[0]
+                
+                out_str = Style.truncate_printable( line_buffer, avail_width )
+                
+                cls.__stdout( out_str )
 
-                if len(buffer) <= width:
-                    break
-                
                 if cls.get_cursor()[0] == width:
-                    cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 )
+                    # cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 ) # should be wrong
+                    cls.set_cursor( 0, cls.get_cursor()[1]+1 )
                 
-                buffer = buffer[width:]
+                line_buffer = line_buffer[len(out_str):]
+                
+                if not line_buffer:
+                    break
             
             if i != len(arg_lines) - 1:
-                cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 )
+                # cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 ) # should be wrong
+                cls.set_cursor( 0, cls.get_cursor()[1]+1 )
+        
+        cls.__flush()
     
     @classmethod
     def write_line(cls, *args:str, sep:str=" ") -> None:
         """ writes to terminal at current cursor position and starts a new line """
-        cls.write( *args, "\n", sep=sep )
+        cls.write( sep.join( map(str, args) ), "\n", sep='' )
     
     @classmethod
     def write_at(cls, msg:str, col:int, line:int, absolute:bool=True) -> None:
@@ -522,6 +704,100 @@ class Console():
             cls.write(msg)
     
     
+    #---------------------#
+    #  Styling functions  #
+    #---------------------#
+    @classmethod
+    @overload
+    def set_style(cls, style: Style ) -> Self:
+        """
+        Set the style of the cursor to be applied for all strings written to the Console after this
+        
+        Args:
+            style (`Style`): predefined style
+
+        Returns:
+            `Self`: returns itself for monad programming style
+        """
+        ...
+    @classmethod
+    @overload
+    def set_style(cls, fg:int|str=None, bg:int|str=None, styles:STYLE_TYPE|list[STYLE_TYPE]=None ) -> Self: 
+        """
+        Set the style of the cursor to be applied for all strings written to the Console after this
+
+        colors can be either:
+            - an `int` as an index into the terminals (3-bit/8-bit) color palette; or
+            - a 24-bit RGB color of the format `#RRGGBB`
+
+        Args:
+            fg (`int | str`, optional): foreground color. Defaults to the terminals default color.
+            bg (`int | str`, optional): background color. Defaults to the terminals default color.
+            styles (`STYLE_TYPE | list[STYLE_TYPE]`, optional): combination or none special effects/styles. Defaults to no style.
+        
+        Returns:
+            `Self`: returns itself for monad programming style
+        """
+        ...
+    @classmethod
+    def set_style(cls, fg_or_style:int|str|Style=None, bg:int|str=None, styles:STYLE_TYPE|list[STYLE_TYPE]=None ) -> Self:
+        if isinstance( fg_or_style, Style ):
+            cls.__applied_style = fg_or_style
+        elif fg_or_style == None and bg == None and styles == None:
+            pass
+        else:
+            cls.__applied_style = Style( fg_or_style, bg, styles )
+        
+        return cls
+
+    @classmethod
+    def rest_style(cls) -> Self:
+        """ resets the style to the terminals default style """
+        return cls.set_style( Style.default() )
+
+    @classmethod
+    @contextmanager
+    @overload
+    def stylized(cls, style: Style ):
+        """
+        Context which applies a style to all strings written to `Console` inside of the context
+
+        restores the previous style after on leaving the context
+
+        Args:
+            style (`Style`): predefined style to be applied in the context
+        """
+        ...
+    @classmethod
+    @contextmanager
+    @overload
+    def stylized(cls, fg:int|str=None, bg:int|str=None, styles:STYLE_TYPE|list[STYLE_TYPE]=None):
+        """
+        Context which applies a style to all strings written to `Console` inside of the context
+
+        restores the previous style after on leaving the context
+
+        Args:
+            fg (`int | str`, optional): foreground color. Defaults to the terminals default color.
+            bg (`int | str`, optional): background color. Defaults to the terminals default color.
+            styles (`STYLE_TYPE | list[STYLE_TYPE]`, optional): combination or none special effects/styles. Defaults to no style.
+        """
+        ...
+    @classmethod
+    @contextmanager
+    def stylized(cls, fg_or_style:int|str|Style=None, bg:int|str=None, styles:STYLE_TYPE|list[STYLE_TYPE]=None):
+        old_style = cls.__applied_style
+        cls.set_style( fg_or_style, bg, styles )
+        try:
+            yield cls
+        finally:
+            # cls.rest_style() # prob unnecessary
+            cls.set_style( old_style )
+    
+    
+    #-----------------------------#
+    #  Cursor position functions  #
+    #-----------------------------#
     @classmethod
     def get_cursor(cls, *, true_cursor_pos:bool=False) -> tuple[int, int]:
         """
@@ -552,19 +828,22 @@ class Console():
 
         col, line = cls._transform_local_2_global( col + c, line + l )
         
-        cls.__stdout( sc.move_to( col, line ) )
+        cls.__stdout( sc.move_to( col, line ), True )
     
     @classmethod
     def hide_cursor(cls) -> None:
-        """ hide the blinking cursor symbol on the screen """
-        cls.__stdout( sc.hide_cursor )
+        """ hide the cursor symbol on the screen """
+        cls.__stdout( sc.hide_cursor, True )
     
     @classmethod
     def show_cursor(cls) -> None:
-        """ show the blinking cursor symbol on the screen """
-        cls.__stdout( sc.show_cursor )
+        """ show the cursor symbol on the screen """
+        cls.__stdout( sc.show_cursor, True )
     
     
+    #--------------#
+    #  Key events  #
+    #--------------#
     @classmethod
     def get_key(cls) -> Key:
         """
@@ -687,7 +966,8 @@ class Console():
     def clear(cls) -> None:
         """ clears the terminal screen completely blank """
         if cls.__is_virtual:
-            cls.clear_rectangle( cls._get_screen_lt(), cls._get_screen_rb() )
+            cs = cls.get_console_size()
+            cls.clear_rectangle( (0,0), (cs[0]-1, cs[1]-1) )
             return
         
         console.utils.cls()
@@ -700,17 +980,15 @@ class Console():
         left_top and right_bottom coordinates are inclusive, meaning they are part of the area to be cleared
 
         Args:
-            left_top (`tuple`[`int`, `int`]): left-top corner of rectangle (in screen coordinates)
-            right_bottom (`tuple`[`int`, `int`]): right-bottom corner of rectangle (in screen coordinates)
+            left_top (`tuple[int, int]`): left-top corner of rectangle (in screen coordinates)
+            right_bottom (`tuple[int, int]`): right-bottom corner of rectangle (in screen coordinates)
         """
         # clamp area to active area
-        left_top, right_bottom = cls.clamp_area( left_top, right_bottom, (0, 0), cls.get_console_size() )
+        cs = cls.get_console_size()
+        left_top, right_bottom = cls.clamp_area( left_top, right_bottom, (0, 0), (cs[0]-1, cs[1]-1) )
         
-        width  = right_bottom[0] - left_top[0] + 1
-        height = right_bottom[1] - left_top[1] + 1
-        
-        width  = max( 0, width )
-        height = max( 0, height )
+        width  = max( 0, right_bottom[0] - left_top[0] + 1 )
+        height = max( 0, right_bottom[1] - left_top[1] + 1 )
         
         empty_line = ' ' * width
         
@@ -737,6 +1015,10 @@ class Console():
         )
     
     
+    #-----------------------------#
+    #  helper and util functions  #
+    #-----------------------------#
+    
     @classmethod
     def _transform_local_2_global(cls, col:int, line:int) -> tuple[int, int]:
         """
@@ -755,7 +1037,6 @@ class Console():
             `tuple[int, int]`: column, line in global coordinates
         """
         return cls.clamp_point( (col + cls._get_screen_lt()[0], line + cls._get_screen_lt()[1]), cls._get_screen_lt(), cls._get_screen_rb() )
-    
     @classmethod
     def _transform_global_2_local(cls, col:int, line:int) -> tuple[int, int]:
         """
@@ -779,7 +1060,6 @@ class Console():
     @classmethod
     def _get_screen_lt(cls) -> tuple[int, int]:
         return cls.__screen_lt if cls.__is_virtual else (0, 0)
-
     @classmethod
     def _get_screen_rb(cls) -> tuple[int, int]:
         return cls.__screen_rb if cls.__is_virtual else cls.get_console_size(true_terminal_size=True)
@@ -787,13 +1067,35 @@ class Console():
     
     @staticmethod
     def clamp_point( point:tuple[int, int], bound_lt:tuple[int, int], bound_rb:tuple[int, int] ) -> tuple[int, int]:
+        """
+        clamp a given 2D point inside a defined bound-box
+
+        Args:
+            point (`tuple[int, int]`): point to be clamped
+            bound_lt (`tuple[int, int]`): bound-box left-top corner position
+            bound_rb (`tuple[int, int]`): bound-box right-bottom corner position
+
+        Returns:
+            `tuple[int, int]`: clamped point
+        """
         return (
             max( bound_lt[0], min( point[0], bound_rb[0] ) ),
             max( bound_lt[1], min( point[1], bound_rb[1] ) )
         )
-    
     @staticmethod
     def clamp_area( area_lt:tuple[int, int], area_rb:tuple[int, int], bound_lt:tuple[int, int], bound_rb:tuple[int, int] ) -> tuple[ tuple[int, int], tuple[int, int] ]:
+        """
+        clamp a given rectangular area inside a defined bound-box
+
+        Args:
+            area_lt (`tuple[int, int]`): rectangular areas left-top corner to be clamped
+            area_rb (`tuple[int, int]`): rectangular areas right-bottom corner to be clamped
+            bound_lt (`tuple[int, int]`): bound-box left-top corner position
+            bound_rb (`tuple[int, int]`): bound-box right-bottom corner position
+
+        Returns:
+            `tuple[ tuple[int, int], tuple[int, int] ]`: clamped area
+        """
         return (
             Console.clamp_point( area_lt, bound_lt, bound_rb ),
             Console.clamp_point( area_rb, bound_lt, bound_rb ),
@@ -815,12 +1117,17 @@ class Console():
         
         assert col >= 0 and line >= 0, f"requested cursor position of ({col}, {line}) is invalid"
         
-        cls.__stdout( sc.move_to( col, line ) )
+        cls.__stdout( sc.move_to( col, line ), True )
 
     @classmethod
-    def __stdout(cls, code:str) -> None:
-        sys.stdout.write( code )
+    def __flush(cls) -> None:
         sys.stdout.flush()
+    @classmethod
+    def __stdout(cls, code:str, flush:bool=False) -> None:
+        sys.stdout.write( code )
+        
+        if flush:
+            cls.__flush()
 
 
 if __name__ == "__main__":
@@ -828,16 +1135,34 @@ if __name__ == "__main__":
     Console.clear()
     Console.set_cursor( 0, 0 )
     
+    # Testing Colors =================================================================================================
+    Console.write_line( "This is default" )
+    Console.set_style( "black", "white" )
+    Console.write_line( "This is inverted" )
+    Console.write_line( Style("black", "white").apply("This is also inverted") )
+    Console.rest_style()
+    
+    with Console.virtual_area( (5,5), (25, 20) ):
+        with Console.stylized( "white", "#00aaaa" ): Console.clear()
+        with Console.stylized( styles=STYLE_TYPE.negative )              : sleep(1); Console.write_line( "This is inverted" )
+        with Console.stylized( "green", None, STYLE_TYPE.bold )          : sleep(1); Console.write_line( "This is in bold green" )
+        with Console.stylized( "blue", None, STYLE_TYPE.crossed )        : sleep(1); Console.write_line( "This is in crossed blue", Style("yellow", "black", STYLE_TYPE.blink).apply(", this is blinking yellow"), " and this is crossed blue again" )
+        with Console.stylized( "red", None, STYLE_TYPE.underline )       : sleep(1); Console.write_line( "This is in underlined red" )
+        with Console.stylized( "#ff00ff", "black", STYLE_TYPE.underline ): sleep(1); Console.write_line( "This is in underlined bold magenta" )
+    
+    Console.set_cursor( 0, 20 )
+    # Console.write_line( "This is default" )
+    
     # Testing Console =================================================================================================
-    with Console.virtual_area( (1,1), (5,5), False ):
-        w, h = Console.get_console_size()
-        for l in range(h+1):
-            for c in range(w+1):
-                Console.set_cursor( c, l, True )
-                Console.write( Console.get_key().get_char() )
+    # with Console.virtual_area( (1,1), (5,5), False ):
+    #     w, h = Console.get_console_size()
+    #     for l in range(h+1):
+    #         for c in range(w+1):
+    #             Console.set_cursor( c, l, True )
+    #             Console.write( Console.get_key().get_char() )
     
     
-    # Testing code snippets ============================================================================================
+    # Testing code snippets ===========================================================================================
     
     # Testing Key listener ============================================================================================
     # from time import sleep

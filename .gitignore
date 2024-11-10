@@ -157,3 +157,5 @@ cython_debug/
 #.idea/
 pyvenv.cfg
 .vscode
+
+**/tempCodeRunnerFile.py
