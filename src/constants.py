@@ -2,6 +2,8 @@ from pathlib import Path
 from platformdirs import user_data_path, user_documents_path
 from tabulate import SEPARATING_LINE
 
+from generic_lib.utils import digit_layout_t
+
 IN_DEPLOYMENT_MODE: bool = Path(__file__).parent.name != "src"
 '''Flag to indicate whether the project was 'compiled' with Pyinstaller into a .exe or folder'''
 
@@ -63,11 +65,11 @@ MENUS = [
 KEYBOARD_SLEEP_TIME = 0.5
 
 # Digits-count (prePoint, postPoint)
-DIGIT_LAYOUT_ELECTRICITY = ( 6, 1 )
-DIGIT_LAYOUT_GAS         = ( 5, 3 )
-DIGIT_LAYOUT_WATER       = ( 5, 3 )
-DIGIT_LAYOUT_DELTA       = ( 2, 3 )
-DIGIT_LAYOUT_MONEY       = ( 6, 2 )
+DIGIT_LAYOUT_ELECTRICITY = digit_layout_t( 6, 1 )
+DIGIT_LAYOUT_GAS         = digit_layout_t( 5, 3 )
+DIGIT_LAYOUT_WATER       = digit_layout_t( 5, 3 )
+DIGIT_LAYOUT_DELTA       = digit_layout_t( 2, 3 )
+DIGIT_LAYOUT_MONEY       = digit_layout_t( 6, 2 )
 
 # see for further language codes: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/a9eac961-e77d-41a6-90a5-ce1a8b0cdb9c?redirectedfrom=MSDN
 LANGUANGE_CODE = "de-DE"
@@ -118,7 +120,7 @@ PATH_LOGS    = (PATH_APPDATA if IN_DEPLOYMENT_MODE else PATH_ROOT).joinpath("log
 PATH_PDF     = user_documents_path()
 
 
-LIST_DIGIT_OBJ_LAYOUTS: list[tuple[int, int]] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
+LIST_DIGIT_OBJ_LAYOUTS: list[digit_layout_t] = [ DIGIT_LAYOUT_ELECTRICITY, DIGIT_LAYOUT_GAS, DIGIT_LAYOUT_WATER ]
 
 
 COUNT_READING_ATTRIBUTES = len( LIST_READING_ATTRIBUTE_NAMES )

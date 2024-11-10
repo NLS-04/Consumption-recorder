@@ -6,22 +6,52 @@ from typing      import NamedTuple, TypeVar, Generic, Iterable
 from datetime import date, timedelta
 from math     import floor
 
+from colors import ansilen
 
 T = TypeVar("T")
 
+
+digit_layout_t = NamedTuple( "digit_layout_t", [("pre_point", int), ("post_point", int)] )
+stats_t = NamedTuple( "stats_t", [("mean", float), ("median", T), ("variance", float)] )
 
 #-----------#
 #  generic  #
 #-----------#
 
 def prod( iterable:Iterable[T], /, start:int=0 ) -> T:
+    """
+    calculate the product of the elements of the `iterable` starting
+    at the index `start`
+
+    Args:
+        iterable (`Iterable[T]`): sequence of elements their product is to be calculated
+        start (`int`, optional): start index of the iterable. Defaults to 0.
+
+    Returns:
+        `T`: product of the iterable
+    """
     out = 1.0
     for x in iterable[start:]:
         out *= x
     return out
 
-def digit_layout_to_format_specifier( digit_layout:tuple[int, int] ) -> str:
-    return f"{sum(digit_layout)}.{digit_layout[1]}f"
+def digit_layout_to_format_specifier( digit_layout:digit_layout_t ) -> str:
+    """
+    get the string format specifier for the float format of the supplied digit layout
+
+    can be used in format strings to format float to the specified digit layout
+    
+    Example:
+    >>> digit_layout_to_format_specifier( digit_layout_t(2,5) )
+    >>> "7.5f"
+
+    Args:
+        digit_layout (`digit_layout_t`): (count of pre decimal digits, count of post decimal digits)
+
+    Returns:
+        `str`: format specifier
+    """
+    return f"{digit_layout.pre_point+digit_layout.post_point+1}.{digit_layout.post_point}f"
 
 
 #-----------------------#
@@ -61,11 +91,12 @@ def max_width_of_strings( list_of_str:list[str] ) -> tuple[str, int]:
     if not list_of_str:
         return None, 0
     
-    res: str = max( list_of_str, key=len )
+    res: str = max( list_of_str, key=ansilen )
     
-    return res, len(res)
+    return res, ansilen(res)
 
 def replace_substring( string_to_be_overwritten:str, at_index:int, substring:str ) -> str:
+    # will not work with colorized strings
     assert 0 <= at_index, "at_index must be non negative"
     assert at_index < len(string_to_be_overwritten) - len(substring), "substring does not fit at the supplied index"
     
@@ -76,7 +107,6 @@ def replace_substring( string_to_be_overwritten:str, at_index:int, substring:str
 #  statistics  #
 #--------------#
 
-stats_t = NamedTuple( "stats_t", [("mean", float), ("median", T), ("variance", float)] )
 def simple_statistics( data:list[T] ) -> stats_t[T]:
     N = len(data)
     
@@ -124,7 +154,7 @@ class Intersection(Enum):
     PARTIAL_OVERLAP_LEFT  = 4
     PARTIAL_OVERLAP_RIGHT = 5
 
-div_t = NamedTuple("div_t", [("quotient", int), ("remainder", int)])
+div_t      = NamedTuple("div_t",       [("quotient", int), ("remainder", int)])
 calender_t = NamedTuple( "calender_t", [("days", int), ("months", int), ("years", int)] )
 class Dates_Delta:
     DAYS_IN_YEAR : float = 365.25
@@ -255,13 +285,45 @@ def stringify( _l:list[str], / ) -> str:
 def str_to_date( data_str:list[str] ) -> date:
     return date.fromisoformat( '-'.join( [ stringify(data_str[4:8]), stringify(data_str[2:4]), stringify(data_str[0:2]) ] ) )
 
-def float_to_data_format( value:float, digit_count:tuple[int, int]) -> list[str]:
-    format_str = "{:_>%ds}{:0<%ds}" % (digit_count[0], digit_count[1])
-    digits     = ( str( floor(value) ), str( round( value - floor(value), digit_count[1] ) )[2:] )
+def float_to_data_format( value:float, digit_count:digit_layout_t) -> list[str]:
+    """
+    convert a float into a list of chrs respecting the digit layout
     
-    return [ '' if ch == '_' else ch for ch in format_str.format( *digits ) ]
+    values outside of the printable (digit) range are clamped to the associate max/min value
 
+    Example:
+    >>> float_to_data_format( 3.14159, digit_layout_t(2,2) )
+    >>> ['', '3', '1', '4']
+    >>> float_to_data_format( -3.14159, digit_layout_t(2,2) )
+    >>> ['-', '3', '1', '4']
+
+    >>> float_to_data_format( 123.456, digit_layout_t(2,2) )
+    >>> ['9', '9', '9', '9']
+    >>> float_to_data_format( -123.456, digit_layout_t(2,2) )
+    >>> ['-', '9', '9', '9']
+
+    Args:
+        value (`float`): float value to be converted
+        digit_layout (`digit_layout_t`): (count of pre decimal digits, count of post decimal digits)
+
+    Returns:
+        `list[str]`: list of the float chr representation
+    """
+   
+    max_val =  10**( digit_count.pre_point   ) - 10**-digit_count.post_point
+    min_val = -10**( digit_count.pre_point-1 ) + 10**-digit_count.post_point
+    
+    clamped_val = max( min_val, min( round( value, digit_count.post_point ), max_val ) )
+    
+    chrs = list( f"{{:_>{digit_layout_to_format_specifier( digit_count )}}}".format( clamped_val ) )
+    
+    return [ ('' if c == '_' else c) for c in chrs if c != '.' ]
 
 
 if __name__ == "__main__":
     print( max_width_of_strings( ["alpha", "beta", "a", "123456789"] ) )
+    print( float_to_data_format(  3.14159, digit_layout_t(2,2) ) )
+    print( float_to_data_format( -123.456, digit_layout_t(2,2)) )
+    print( float_to_data_format(  0.0456 , digit_layout_t(2,2)) )
+    print( float_to_data_format( -0.0456 , digit_layout_t(2,2)) )
+    print( float_to_data_format(  1.0    , digit_layout_t(2,2)) )

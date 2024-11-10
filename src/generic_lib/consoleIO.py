@@ -1,12 +1,11 @@
-from   __future__ import annotations
-from   typing     import Optional, Sequence, overload, Self, ClassVar
-from   time       import sleep, time
+from __future__ import annotations
+from typing     import Optional, Sequence, overload, Self, ClassVar, TypeVar
+from time       import sleep, time
+from enum       import Enum
+from contextlib import contextmanager, _GeneratorContextManager
+
 import re
-
-from enum import Enum
-
 import sys
-from   contextlib import contextmanager, _GeneratorContextManager
 
 try:
     from colors import *
@@ -31,6 +30,71 @@ import console.utils
 from   console.screen import sc, Screen
 
 import pynput.keyboard as keyboard
+
+T = TypeVar("T", int, float)
+class Point():
+    """ Simple 2-D Point """
+    __slots__ = [ "x", "y", "col", "line" ]
+    
+    x: T
+    y: T
+    
+    col : T
+    '''alias for x'''
+    line: T
+    '''alias for y'''
+    
+    def __init__(self, x:T, y:T) -> None:
+        self.x    = x
+        self.y    = y
+        self.col  = x
+        self.line = y
+    
+    @property
+    def T(self) -> tuple[T, T]:
+        '''alias for (x, y)'''
+        return ( self.x, self.y )
+    
+    def __add__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
+        return Point( self.x + _o[0], self.y + _o[1] )
+    __radd__ = __add__
+    
+    def __sub__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
+        return Point( self.x - _o[0], self.y - _o[1] )
+    def __rsub__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
+        return self.__neg__().__add__(_o)
+    
+    def __neg__(self) -> Point[T]:
+        return Point( -self.x, -self.y )
+    
+    def __eq__(self, _o:tuple[T, T]|Point[T]) -> bool:
+        return self.x == _o[0] and self.y == _o[1]
+    def __neq__(self, _o:tuple[T, T]|Point[T]) -> bool:
+        return not self.__eq__(_o)
+    
+    def __lt__(self, _o:tuple[T, T]|Point[T]) -> bool:
+        return self.x <= _o[0] and self.y < _o[1] or self.x < _o[0] and self.y <= _o[1]
+    def __gt__(self, _o:tuple[T, T]|Point[T]) -> bool:
+        return self.x >= _o[0] and self.y > _o[1] or self.x > _o[0] and self.y >= _o[1]
+    
+    def __le__(self, _o:tuple[T, T]|Point[T]) -> bool:
+        return self.x <= _o[0] and self.y <= _o[1]
+    def __ge__(self, _o:tuple[T, T]|Point[T]) -> bool:
+        return self.x >= _o[0] and self.y >= _o[1]
+    
+    
+    def __str__(self) -> str:
+        return f"P({self.x}, {self.y})"
+    def __repr__(self) -> str:
+        return f"Point({self.x}, {self.y})"
+    
+    def __getitem__(self, ind:int) -> T:
+        assert 0 <= ind <= 1, IndexError()
+        return self.x if ind == 0 else self.y
+
+    def __iter__(self):
+        yield self.x
+        yield self.y
 
 
 class STYLE_TYPE( Enum ):
@@ -560,8 +624,8 @@ class Console():
     __is_virtual   : ClassVar[ bool ] = False
     __virtual_depth: ClassVar[ int  ] = 0
     
-    __screen_lt: ClassVar[ tuple[int, int] ] = (0, 0)
-    __screen_rb: ClassVar[ tuple[int, int] ] = None
+    __screen_lt: ClassVar[ Point[int] ] = Point(0, 0)
+    __screen_rb: ClassVar[ Point[int] ] = None
     
     __applied_style: ClassVar[ Style ] = Style.default
     
@@ -574,7 +638,7 @@ class Console():
         cls.__is_virtual    = False
         cls.__virtual_depth = 0
         
-        cls.__screen_lt = (0, 0)
+        cls.__screen_lt = Point(0, 0)
         cls.__screen_rb = cls.get_console_size()
         
         cls.__applied_style = Style.default
@@ -622,20 +686,20 @@ class Console():
         if str_args.endswith('\n'):
             arg_lines += ['']
         
-        width, height = cls.get_console_size()
+        width, height = cls.get_console_size().T
         for i, line in enumerate(arg_lines):
             line_buffer = line
             
             while True:
-                avail_width = width - cls.get_cursor()[0]
+                avail_width = width - cls.get_cursor().col
                 
                 out_str = Style.truncate_printable( line_buffer, avail_width )
                 
                 cls.__stdout( out_str )
 
-                if cls.get_cursor()[0] == width:
+                if cls.get_cursor().col == width:
                     # cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 ) # should be wrong
-                    cls.set_cursor( 0, cls.get_cursor()[1]+1 )
+                    cls.set_cursor( 0, cls.get_cursor().line+1 )
                 
                 line_buffer = line_buffer[len(out_str):]
                 
@@ -644,7 +708,7 @@ class Console():
             
             if i != len(arg_lines) - 1:
                 # cls.__set_cursor_no_clamp( 0, cls.get_cursor()[1]+1 ) # should be wrong
-                cls.set_cursor( 0, cls.get_cursor()[1]+1 )
+                cls.set_cursor( 0, cls.get_cursor().line+1 )
         
         cls.__flush()
     
@@ -654,25 +718,24 @@ class Console():
         cls.write( sep.join( map(str, args) ), "\n", sep='' )
     
     @classmethod
-    def write_at(cls, msg:str, col:int, line:int, absolute:bool=True) -> None:
+    def write_at(cls, msg:str, col_line:tuple[int, int]|Point[int], absolute:bool=True) -> None:
         """
         write the given string at the specified position in the terminal
         
         Args:
             msg (`str`): text to be printed
-            col (`int`): column position (x)
-            line (`int`): line position (y)
+            col_line (`tuple[int, int]|Point[int]`): position
             absolute (`bool`, optional): interpret (`col`, `line`) as `absolute` position in the Console or as relative (`not absolute`) positions to the current cursor position. Defaults to True.
         """
-        c, l = (0, 0) if absolute else cls.get_cursor()
+        p = Point(0, 0) if absolute else cls.get_cursor()
         
-        col, line = cls._transform_local_2_global( col + c, line + l )
+        col_line = cls._transform_local_2_global( Point(*col_line) + p )
         
-        with sc.location( line, col ):
+        with sc.location( col_line.line, col_line.col ):
             cls.write( msg )
     
     @classmethod
-    def write_in(cls, msg:str, col:int, line:int, end_col:int=None, end_line:int=None, absolute:bool=True, clear_area:bool=True) -> None:
+    def write_in(cls, msg:str, col_line:tuple[int, int]|Point[int], end_col_line:tuple[int, int]|Point[int]=None, absolute:bool=True, clear_area:bool=True) -> None:
         """
         write the given string at the specified position in the terminal, but clear the area from (col, line) to (end_col, end_line) before writing
         
@@ -682,23 +745,19 @@ class Console():
         
         Args:
             msg (`str`): text to be printed
-            col (`int`): column position (x)
-            line (`int`): line position (y)
-            end_line (`int`): area end line position (y). Defaults to `None`
-            end_col (`int`): area end column position (x). Defaults to `None`
+            col_line (`Point[int]`): area start position
+            end_col_line (`Point[int]`): area end position
             absolute (`bool`, optional): interpret (`col`, `line`) as `absolute` position in the Console or as relative (`not absolute`) positions to the current cursor position. Defaults to True.
         """
-        c, l  = (0, 0) if absolute else cls.get_cursor()
-        col  += c
-        line += l
+        p  = Point(0, 0) if absolute else cls.get_cursor()
+        col_line = Point(*col_line) + p
         
-        end_col  = end_col  + c if not absolute and end_col  else end_col 
-        end_line = end_line + l if not absolute and end_line else end_line
+        if not absolute and end_col_line:
+            end_col_line = Point(*end_col_line) + p
         
-        end_col  = end_col  if end_col  else cls.get_console_size()[0]
-        end_line = end_line if end_line else line
+        end_col_line = Point(*end_col_line) if end_col_line else Point( cls.get_console_size().col, col_line.line )
         
-        with cls.virtual_area( (col, line), (end_col, end_line) ):
+        with cls.virtual_area( col_line, end_col_line ):
             if clear_area:
                 cls.clear()
             cls.write(msg)
@@ -799,36 +858,59 @@ class Console():
     #  Cursor position functions  #
     #-----------------------------#
     @classmethod
-    def get_cursor(cls, *, true_cursor_pos:bool=False) -> tuple[int, int]:
+    def get_cursor(cls, *, true_cursor_pos:bool=False) -> Point[int]:
         """
         left upper corner is (0, 0)
         
         Returns:
-            (`column`, `line`): `column` and `line` of the cursor if unsuccessful defaults to (0, 0)
+            `Point[int]`: position of the cursor if unsuccessful defaults to Point(0, 0)
         """
-        c, l = console.detection.get_position()
-        c, l = c-1, l-1
+        p = Point( *console.detection.get_position() )
+        p = p - (1,1)
         
         if true_cursor_pos:
-            return c, l
+            return p
         
-        return cls._transform_global_2_local( c, l )
+        return cls._transform_global_2_local( p )
     
     @classmethod
-    def set_cursor(cls, col:int, line:int, absolute:bool=True) -> None:
+    def set_cursor(cls, col:int, line:int, *, absolute:bool=True) -> None:
         """
         move the cursor to a specific position in the terminal
         
         Args:
-            col (`int`): column position (x)
-            line (`int`): line position (y)
+            col (`int`): cursor column position
+            line (`int`): cursor line position
             absolute (`bool`, optional): interpret (`col`, `line`) as `absolute` position in the Console or as relative (`not absolute`) positions to the current cursor position. Defaults to True.
         """
-        c, l = (0, 0) if absolute else cls.get_cursor()
-
-        col, line = cls._transform_local_2_global( col + c, line + l )
+        ...
+    @classmethod
+    def set_cursor(cls, col_line:Point[int], *, absolute:bool=True) -> None:
+        """
+        move the cursor to a specific position in the terminal
         
-        cls.__stdout( sc.move_to( col, line ), True )
+        Args:
+            col_line (`Point[int]`): cursor position
+            absolute (`bool`, optional): interpret the cursor position as `absolute` position in the Console or as relative (`not absolute`) positions to the current cursor position. Defaults to True.
+        """
+        ...
+    @classmethod
+    def set_cursor(cls, col_point:int|Point[int], line:int=None, *, absolute:bool=True) -> None:
+        """ move the cursor to a specific position in the terminal """
+        
+        col_line: Point
+        if isinstance( col_point, int ) and isinstance( line, int ):
+            col_line = Point( col_point, line )
+        elif isinstance( col_point, Point ):
+            col_line = col_point
+        else:
+            raise TypeError( f"Arguments of types ({type(col_point), type(line)}) are an invalide combination" )
+        
+        p = Point(0, 0) if absolute else cls.get_cursor()
+
+        col_line = cls._transform_local_2_global( col_line + p )
+        
+        cls.__stdout( sc.move_to( *col_line.T ), True )
     
     @classmethod
     def hide_cursor(cls) -> None:
@@ -870,7 +952,7 @@ class Console():
             `str`: user inputted string
         """
         cur = Console.get_cursor()
-        Console.set_cursor( col if col else cur[0], line if line else cur[1], absolute )
+        Console.set_cursor( col if col else cur.col, line if line else cur.line, absolute=absolute )
         
         res = ''
         try:
@@ -878,7 +960,7 @@ class Console():
         except EOFError or KeyboardInterrupt:
             res = ''
         finally:
-            Console.set_cursor( *cur, True )
+            Console.set_cursor( cur, absolute=True )
             return res
 
     @classmethod
@@ -907,7 +989,7 @@ class Console():
     
     @classmethod
     @contextmanager
-    def virtual_area(cls, left_top:tuple[int, int], right_bottom:tuple[int, int]=None, reset_cursor_on_exit:bool=True):
+    def virtual_area(cls, left_top:tuple[int,int], right_bottom:tuple[int,int]=None, reset_cursor_on_exit:bool=True):
         """
         Virtually limit the terminal screen to a specific area
         
@@ -919,25 +1001,64 @@ class Console():
         e.g. writing at (0, 0) would actually write at the `left_top` position on the screen
 
         Args:
-            left_top (`tuple`[`int`, `int`]): left-top position of virtual area (inclusive)
-            right_bottom (`tuple`[`int`, `int`], optional): right-bottom position of virtual area (inclusive). Defaults to the console size.
+            left_top (`tuple[int,int]`): left-top position of virtual area (inclusive)
+            right_bottom (`tuple[int,int]`, optional): right-bottom position of virtual area (inclusive). Defaults to the console size.
             do_reset_cursor_on_exit (`bool`, optional): on exiting the virtual area set the cursor to the position it was on when entering the virtual area. Defaults True.
 
         Returns:
             `contextmanager`: `contextmanager`
         """
+        ...
+    @classmethod
+    @contextmanager
+    def virtual_area(cls, left_top:Point[int], right_bottom:Point[int]=None, reset_cursor_on_exit:bool=True):
+        """
+        Virtually limit the terminal screen to a specific area
+        
+        On entering the context the cursor gets set to (0, 0) on the virtual terminal. On exiting the context the cursor gets restored to the position before entering iff `reset_cursor_on_exit` is set to `True`
+
+        ---
+        All methods of `Console` work as you'd expect but with the limited area
+        
+        e.g. writing at (0, 0) would actually write at the `left_top` position on the screen
+
+        Args:
+            left_top (`Point[int]`): left-top position of virtual area (inclusive)
+            right_bottom (`Point[int]`, optional): right-bottom position of virtual area (inclusive). Defaults to the console size.
+            do_reset_cursor_on_exit (`bool`, optional): on exiting the virtual area set the cursor to the position it was on when entering the virtual area. Defaults True.
+
+        Returns:
+            `contextmanager`: `contextmanager`
+        """
+        ...
+    @classmethod
+    @contextmanager
+    def virtual_area(cls, left_top:Point[int]|tuple[int,int], right_bottom:Point[int]|tuple[int,int]=None, reset_cursor_on_exit:bool=True):
+        """
+        Virtually limit the terminal screen to a specific area
+        
+        On entering the context the cursor gets set to (0, 0) on the virtual terminal. On exiting the context the cursor gets restored to the position before entering iff `reset_cursor_on_exit` is set to `True`
+
+        ---
+        All methods of `Console` work as you'd expect but with the limited area
+        
+        e.g. writing at (0, 0) would actually write at the `left_top` position on the screen
+        """
+        left_top     = Point( *left_top )
+        right_bottom = Point( *right_bottom )
+        
         right_bottom = right_bottom if right_bottom else cls.get_console_size()
         
-        assert left_top[0] <= right_bottom[0] and left_top[1] <= right_bottom[1], f"incompatible corners: left_top must be smaller or equal to right_bottom"
-        assert left_top[0] >= 0 and left_top[1] >= 0, f"incompatible left_top corner: left_top corner coordinates are {left_top[0]}, but both must be non-negative"
+        assert left_top.col <= right_bottom.col and left_top.line <= right_bottom.line, f"incompatible corners: left_top must be smaller or equal to right_bottom"
+        assert left_top.col >= 0 and left_top.line >= 0, f"incompatible left_top corner: left_top corner coordinates are {left_top}, but both must be non-negative"
         
-        col, line = cls.get_cursor()
+        cursor = cls.get_cursor()
         
         prev_screen_lt, prev_screen_rb = cls._get_screen_lt(), cls._get_screen_rb()
         
         # shift from local (virtual) coordinates to global
-        left_top     = cls._transform_local_2_global( *left_top     )
-        right_bottom = cls._transform_local_2_global( *right_bottom )
+        left_top     = cls._transform_local_2_global( left_top     )
+        right_bottom = cls._transform_local_2_global( right_bottom )
         
         cls.__screen_lt, cls.__screen_rb = left_top, right_bottom
         cls.__is_virtual = True
@@ -954,7 +1075,7 @@ class Console():
             cls.__is_virtual = cls.__virtual_depth > 0
             
             if reset_cursor_on_exit:
-                cls.set_cursor( col, line, True )
+                cls.set_cursor( cursor, absolute=True )
     
     @classmethod
     def hidden_cursor(cls) -> _GeneratorContextManager[Screen]:
@@ -967,37 +1088,38 @@ class Console():
         """ clears the terminal screen completely blank """
         if cls.__is_virtual:
             cs = cls.get_console_size()
-            cls.clear_rectangle( (0,0), (cs[0]-1, cs[1]-1) )
+            cls.clear_rectangle( Point(0,0), cs - (1,1) )
             return
         
         console.utils.cls()
     
     @classmethod
-    def clear_rectangle(cls, left_top:tuple[int, int], right_bottom:tuple[int, int]) -> None:
+    def clear_rectangle(cls, left_top:Point[int], right_bottom:Point[int]) -> None:
         """
         clears a specified rectangular area
 
         left_top and right_bottom coordinates are inclusive, meaning they are part of the area to be cleared
 
         Args:
-            left_top (`tuple[int, int]`): left-top corner of rectangle (in screen coordinates)
-            right_bottom (`tuple[int, int]`): right-bottom corner of rectangle (in screen coordinates)
+            left_top (`Point[int]`): left-top corner of rectangle (in screen coordinates)
+            right_bottom (`Point[int]`): right-bottom corner of rectangle (in screen coordinates)
         """
         # clamp area to active area
         cs = cls.get_console_size()
-        left_top, right_bottom = cls.clamp_area( left_top, right_bottom, (0, 0), (cs[0]-1, cs[1]-1) )
+        left_top, right_bottom = cls.clamp_area( left_top, right_bottom, Point(0, 0), cs - (1,1) )
         
-        width  = max( 0, right_bottom[0] - left_top[0] + 1 )
-        height = max( 0, right_bottom[1] - left_top[1] + 1 )
+        delta = right_bottom - left_top
+        width  = max( 0, delta.col  + 1 )
+        height = max( 0, delta.line + 1 )
         
         empty_line = ' ' * width
         
         for line in range(height):
-            cls.write_at( empty_line, left_top[0], left_top[1] + line, True )
+            cls.write_at( empty_line, left_top + (0, line), True )
     
     
     @classmethod
-    def get_console_size(cls, *, true_terminal_size:bool=False) -> tuple[int, int]:
+    def get_console_size(cls, *, true_terminal_size:bool=False) -> Point[int]:
         """
         get the size of the printable area
         
@@ -1005,14 +1127,12 @@ class Console():
         It is recommended not to set this flag unless you absolutely intend to
         
         Returns:
-            (`width`, `height`): `width` and `height` of the console if unsuccessful defaults to (-1, -1)
+            `Point[int]`: size of the console if unsuccessful defaults to Point(-1, -1)
         """
         if true_terminal_size:
-            return tuple( [v-1 for v in console.detection.get_size((1, 1))] )
-        return (
-            cls._get_screen_rb()[0] - cls._get_screen_lt()[0] + 1,
-            cls._get_screen_rb()[1] - cls._get_screen_lt()[1] + 1,
-        )
+            return Point( *console.detection.get_size((1, 1)) ) - (1,1)
+        
+        return cls._get_screen_rb() - cls._get_screen_lt() + (1,1)
     
     
     #-----------------------------#
@@ -1020,7 +1140,7 @@ class Console():
     #-----------------------------#
     
     @classmethod
-    def _transform_local_2_global(cls, col:int, line:int) -> tuple[int, int]:
+    def _transform_local_2_global(cls, col_line:Point[int]) -> Point[int]:
         """
         transform positions from the virtualized/local console-scope to the actual console-scope
 
@@ -1030,15 +1150,18 @@ class Console():
             if no virtual_area is active, the resulting position is the same as the inputted (clamped to the available console space)
 
         Args:
-            col (`int`): column of the local position
-            line (`int`): line of the local position
-
+            col_line (`Point[int]`): position in local coordinates
+        
         Returns:
-            `tuple[int, int]`: column, line in global coordinates
+            `Point[int]`: position in global coordinates
         """
-        return cls.clamp_point( (col + cls._get_screen_lt()[0], line + cls._get_screen_lt()[1]), cls._get_screen_lt(), cls._get_screen_rb() )
+        return cls.clamp_point(
+            col_line + cls._get_screen_lt(),
+            cls._get_screen_lt(),
+            cls._get_screen_rb()
+        )
     @classmethod
-    def _transform_global_2_local(cls, col:int, line:int) -> tuple[int, int]:
+    def _transform_global_2_local(cls, col_line:Point[int]) -> Point[int]:
         """
         transform positions from the global console-scope to the virtualized/local console-scope
 
@@ -1048,53 +1171,56 @@ class Console():
             if no virtual_area is active, the resulting position is the same as the inputted (clamped to the available console space)
 
         Args:
-            col (`int`): column of the global position
-            line (`int`): line of the global position
-
+            col_line (`Point[int]`): position in global coordinates
+        
         Returns:
-            `tuple[int, int]`: column, line in local coordinates
+            `Point[int]`: position in local coordinates
         """
-        return cls.clamp_point( (col - cls._get_screen_lt()[0], line - cls._get_screen_lt()[1]), (0,0), cls.get_console_size() )
+        return cls.clamp_point(
+            col_line - cls._get_screen_lt(),
+            Point(0,0),
+            cls.get_console_size()
+        )
 
     
     @classmethod
-    def _get_screen_lt(cls) -> tuple[int, int]:
-        return cls.__screen_lt if cls.__is_virtual else (0, 0)
+    def _get_screen_lt(cls) -> Point[int]:
+        return cls.__screen_lt if cls.__is_virtual else Point(0, 0)
     @classmethod
-    def _get_screen_rb(cls) -> tuple[int, int]:
+    def _get_screen_rb(cls) -> Point[int]:
         return cls.__screen_rb if cls.__is_virtual else cls.get_console_size(true_terminal_size=True)
     
     
     @staticmethod
-    def clamp_point( point:tuple[int, int], bound_lt:tuple[int, int], bound_rb:tuple[int, int] ) -> tuple[int, int]:
+    def clamp_point( point:Point[int], bound_lt:Point[int], bound_rb:Point[int] ) -> Point[int]:
         """
         clamp a given 2D point inside a defined bound-box
 
         Args:
-            point (`tuple[int, int]`): point to be clamped
-            bound_lt (`tuple[int, int]`): bound-box left-top corner position
-            bound_rb (`tuple[int, int]`): bound-box right-bottom corner position
+            point (`Point[int]`): point to be clamped
+            bound_lt (`Point[int]`): bound-box left-top corner position
+            bound_rb (`Point[int]`): bound-box right-bottom corner position
 
         Returns:
-            `tuple[int, int]`: clamped point
+            `Point[int]`: clamped point
         """
-        return (
-            max( bound_lt[0], min( point[0], bound_rb[0] ) ),
-            max( bound_lt[1], min( point[1], bound_rb[1] ) )
+        return Point(
+            max( bound_lt.col , min( point.col , bound_rb.col  ) ),
+            max( bound_lt.line, min( point.line, bound_rb.line ) )
         )
     @staticmethod
-    def clamp_area( area_lt:tuple[int, int], area_rb:tuple[int, int], bound_lt:tuple[int, int], bound_rb:tuple[int, int] ) -> tuple[ tuple[int, int], tuple[int, int] ]:
+    def clamp_area( area_lt:Point[int], area_rb:Point[int], bound_lt:Point[int], bound_rb:Point[int] ) -> tuple[ Point[int], Point[int] ]:
         """
         clamp a given rectangular area inside a defined bound-box
 
         Args:
-            area_lt (`tuple[int, int]`): rectangular areas left-top corner to be clamped
-            area_rb (`tuple[int, int]`): rectangular areas right-bottom corner to be clamped
-            bound_lt (`tuple[int, int]`): bound-box left-top corner position
-            bound_rb (`tuple[int, int]`): bound-box right-bottom corner position
+            area_lt (`Point[int]`): rectangular areas left-top corner to be clamped
+            area_rb (`Point[int]`): rectangular areas right-bottom corner to be clamped
+            bound_lt (`Point[int]`): bound-box left-top corner position
+            bound_rb (`Point[int]`): bound-box right-bottom corner position
 
         Returns:
-            `tuple[ tuple[int, int], tuple[int, int] ]`: clamped area
+            `tuple[ Point[int], Point[int] ]`: clamped area
         """
         return (
             Console.clamp_point( area_lt, bound_lt, bound_rb ),
@@ -1102,22 +1228,21 @@ class Console():
         )
 
     @classmethod
-    def __set_cursor_no_clamp(cls, col:int, line:int, absolute:bool=True) -> None:
+    def __set_cursor_no_clamp(cls, col_line:Point[int], absolute:bool=True) -> None:
         """
         move the cursor to a specific position in the terminal w/o clamping the position
         
         Args:
-            col (`int`): column position (x)
-            line (`int`): line position (y)
+            col_line (`Point[int]`): cursor position
             absolute (`bool`, optional): interpret (`col`, `line`) as `absolute` position in the Console or as relative (`not absolute`) positions to the current cursor position. Defaults to True.
         """
-        c, l = (0, 0) if absolute else cls.get_cursor()
+        p = Point(0, 0) if absolute else cls.get_cursor()
 
-        col, line = col + c + cls._get_screen_lt()[0], line + l + cls._get_screen_lt()[1]
+        col_line = col_line + p + cls._get_screen_lt()
         
-        assert col >= 0 and line >= 0, f"requested cursor position of ({col}, {line}) is invalid"
+        assert col_line.col >= 0 and col_line.line >= 0, f"requested cursor position of {col_line} is invalid"
         
-        cls.__stdout( sc.move_to( col, line ), True )
+        cls.__stdout( sc.move_to( *col_line ), True )
 
     @classmethod
     def __flush(cls) -> None:

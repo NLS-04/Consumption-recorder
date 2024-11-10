@@ -12,7 +12,7 @@ import inspect
 
 
 from generic_lib.logger    import get_logger, logging
-from generic_lib.consoleIO import Console, Key, keyboard
+from generic_lib.consoleIO import Console, Key, keyboard, Point
 from generic_lib.utils     import *
 from constants             import *
 
@@ -65,69 +65,6 @@ LOGGER = get_logger( PATH_LOGS, "debug_Frames", _adapter, identifier = lambda r:
 #----------------------------------------------------------------------------------------------------------------------
 # Helper #
 #--------#
-T = TypeVar("T", int, float)
-class Point():
-    __slots__ = [ "x", "y", "col", "line" ]
-    
-    x: T
-    y: T
-    
-    col : T
-    '''alias for x'''
-    line: T
-    '''alias for y'''
-    
-    def __init__(self, x:T, y:T) -> None:
-        self.x    = x
-        self.y    = y
-        self.col  = x
-        self.line = y
-    
-    @property
-    def T(self) -> tuple[T, T]:
-        '''alias for (x, y)'''
-        return ( self.x, self.y )
-    
-    def __add__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
-        return Point( self.x + _o[0], self.y + _o[1] )
-    __radd__ = __add__
-    
-    def __sub__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
-        return Point( self.x - _o[0], self.y - _o[1] )
-    def __rsub__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
-        return self.__neg__().__add__(_o)
-    
-    def __neg__(self) -> Point[T]:
-        return Point( -self.x, -self.y )
-    
-    def __eq__(self, _o:tuple[T, T]|Point[T]) -> bool:
-        return self.x == _o[0] and self.y == _o[1]
-    def __neq__(self, _o:tuple[T, T]|Point[T]) -> bool:
-        return not self.__eq__(_o)
-    
-    def __lt__(self, _o:tuple[T, T]|Point[T]) -> bool:
-        return self.x <= _o[0] and self.y < _o[1] or self.x < _o[0] and self.y <= _o[1]
-    def __gt__(self, _o:tuple[T, T]|Point[T]) -> bool:
-        return self.x >= _o[0] and self.y > _o[1] or self.x > _o[0] and self.y >= _o[1]
-    
-    def __le__(self, _o:tuple[T, T]|Point[T]) -> bool:
-        return self.x <= _o[0] and self.y <= _o[1]
-    def __ge__(self, _o:tuple[T, T]|Point[T]) -> bool:
-        return self.x >= _o[0] and self.y >= _o[1]
-    
-    
-    def __str__(self) -> str:
-        return f"P({self.x}, {self.y})"
-    def __repr__(self) -> str:
-        return f"Point({self.x}, {self.y})"
-    
-    def __getitem__(self, ind:int) -> T:
-        assert 0 <= ind <= 1, IndexError()
-        return self.x if ind == 0 else self.y
-
-    def __iter__(self):
-        yield self.x
-        yield self.y
 
 @LOGGER.remember_class
 class Result():
@@ -448,7 +385,8 @@ class Manager():
     # For frontend users
     #----------------------------------------------------------------------------------------------------------------------
     def set_position_left_top(self, col:int, line:int, absolute:bool=True) -> Self:
-        self.__bound_lt = Point(col, line) if absolute else Point(col+Console.get_cursor()[0], line+Console.get_cursor()[1])
+        p = Point(col, line)
+        self.__bound_lt = p if absolute else p + Console.get_cursor()
         return self
     
     @overload
@@ -538,7 +476,7 @@ class Manager():
                 self.__post_forward_key()
         
         Console.show_cursor()
-        Console.set_cursor( 0, self.__bound_rb[1]+1, True )
+        Console.set_cursor( 0, self.__bound_rb[1]+1, absolute=True )
         
         LOGGER.info("finished: returning results")
         
@@ -829,7 +767,7 @@ class Frame( Protocol ):
     
     def clear(self, *, force:bool=False) -> None:
         """clear printable area of this focus, can be overridden but must always clear the whole assigned area when flag forced is set"""
-        Console.clear_rectangle( self.position.T, self.bounding.T )
+        Console.clear_rectangle( self.position, self.bounding )
     
     def get_bbox(self) -> tuple[ tuple[int, int], tuple[int, int] ]:
         """
@@ -875,7 +813,7 @@ class Plain_Text( Frame ):
         self.bounding = Point( max_width_of_strings( self.text.splitlines() )[1]-1, len(self.text.splitlines())-1 )
     
     def render(self) -> None:
-        Console.write_in( self.text, *self.position, *self.bounding )
+        Console.write_in( self.text, self.position, self.bounding )
     
     def set_position(self, pos:tuple[int, int], bound:Optional[tuple[int,int]]=None) -> None:
         super().set_position( pos, bound )
@@ -1016,7 +954,7 @@ class Input( Interactable, Registerable ):
     def awake(self) -> None:
         self.reset_cursor()
         
-        Console.set_cursor( *self.cursor(), False )
+        Console.set_cursor( self.cursor(), absolute=False )
         Console.show_cursor()
     
     def forward_key(self, key: Key) -> None:
@@ -1094,18 +1032,18 @@ class Input( Interactable, Registerable ):
     
     def render_foreground(self) -> None:
         for i in range(self.input_size):
-            Console.write_at( self.data[i], *self.cursor(i), False )
+            Console.write_at( self.data[i], self.cursor(i), False )
     
     def render_background(self) -> None:
         for i in range(self.input_size):
-            Console.write_at( PLACE_HOLDER, *self.cursor(i), False )
+            Console.write_at( PLACE_HOLDER, self.cursor(i), False )
     
     
     def validate(self) -> None:
         self.render()
         self.reset_cursor()
         
-        Console.set_cursor( *self.pos_validate, True )
+        Console.set_cursor( self.pos_validate, absolute=True )
         # check for empty entry (if accept_empty)
         if self.data == self.right_fill([]) and self.accept_empty:
             Console.write( self.MSG_EMPTY )
@@ -1132,7 +1070,7 @@ class Input( Interactable, Registerable ):
     
     def enter_via_arrow(self, cursor_col:int, cursor_line:int) -> None:
         """find a suitable data_ptr for the given cursor position and if possible set the data_ptr accordingly"""
-        rel_col, rel_line = Console.clamp_point( (cursor_col, cursor_line) - self.pos_input, (0, 0), self.cursor( get_max_position=True ) )
+        rel_col, rel_line = Console.clamp_point( (cursor_col, cursor_line) - self.pos_input, Point(0, 0), self.cursor( get_max_position=True ) )
         
         for i in range(0, self.input_size+1):
             if ( rel_col, rel_line ) == self.cursor(i):
@@ -1206,7 +1144,7 @@ class Input( Interactable, Registerable ):
     #-------------------#
     @final
     def render_name(self) -> None:
-        Console.write_at( self.formatted_name, *self.position, True )
+        Console.write_at( self.formatted_name, self.position, True )
     
     @final
     def set_offsets(self, name_format_shift:int, validate:Optional[tuple[int, int]]=None) -> None:
@@ -1223,7 +1161,7 @@ class Input( Interactable, Registerable ):
         """
         set cursor to the input starting position of this Focus_Input
         """
-        Console.set_cursor( *self.pos_input, True )
+        Console.set_cursor( self.pos_input, absolute=True )
     
     @final
     def right_fill(self, data_to_fit:list[str]) -> str:
@@ -1270,8 +1208,8 @@ class Date( Input ):
         self.dates = preset_dates
     
     def render_foreground(self) -> None:
-        Console.write_at( self.DELIMITER, 2, 0, False )
-        Console.write_at( self.DELIMITER, 5, 0, False )
+        Console.write_at( self.DELIMITER, Point(2, 0), False )
+        Console.write_at( self.DELIMITER, Point(5, 0), False )
         
         super().render_foreground()
     
@@ -1387,7 +1325,7 @@ class Date_no_day( Input ):
         self.dates = preset_dates
     
     def render_foreground(self) -> None:
-        Console.write_at( self.DELIMITER, 2, 0, False )
+        Console.write_at( self.DELIMITER, Point(2, 0), False )
         
         super().render_foreground()
     
@@ -1465,20 +1403,20 @@ class Date_no_day( Input ):
 
 @LOGGER.remember_class
 class Value( Input ):
-    digit_count    : tuple[int, int]
+    digit_count    : digit_layout_t
     sum_digit_count: int
     
     def __init__(
                  self,
                  prompt_name : str,
-                 accept_empty: bool            = False,
-                 prefill     : float           = None,
-                 digit_count : tuple[int, int] = (0, 0)
+                 accept_empty: bool           = False,
+                 prefill     : float          = None,
+                 digit_count : digit_layout_t = digit_layout_t(0, 0)
                 ) -> None:
         self.digit_count     = digit_count
-        self.sum_digit_count = sum( self.digit_count )
+        self.sum_digit_count = self.digit_count.pre_point + self.digit_count.post_point
         
-        super().__init__(prompt_name, accept_empty, "", digit_count[0] + digit_count[1] )
+        super().__init__(prompt_name, accept_empty, "", self.sum_digit_count )
         
         self.data_ptr = self.input_size
         self.data     = [''] * self.input_size
@@ -1493,10 +1431,19 @@ class Value( Input ):
 
     
     def data_format_to_float_str(self) -> str:
-        return stringify( map( lambda ch: ch if ch else '0', ( *(self.data[:self.digit_count[0]]), '.', *(self.data[self.digit_count[0]:]) ) ) )
+        return stringify(
+            map(
+                lambda ch: ch if ch else '0',
+                (
+                    *( self.data[:self.digit_count.pre_point] ),
+                    '.',
+                    *( self.data[self.digit_count.pre_point:] )
+                )
+            )
+        )
     
     def render_foreground(self) -> None:
-        Console.write_at( '.', self.digit_count[0], 0, False )
+        Console.write_at( '.', Point(self.digit_count.pre_point, 0), False )
         
         val = self.transform()
         
@@ -1511,7 +1458,7 @@ class Value( Input ):
         if get_max_position:
             return Point( self.sum_digit_count + 1, 0 )
         
-        return Point( dptr + ( dptr >= self.digit_count[0] ), 0 )
+        return Point( dptr + ( dptr >= self.digit_count.pre_point ), 0 )
     
     def transform(self) -> float:
         if self.data == self.right_fill([]):
@@ -1541,7 +1488,7 @@ class Value( Input ):
 
             # reposition the cursor and the typed input so that they line up with the decimal separator in screen
             case Key( np=None, an='.'|',' ):
-                delta = self.data_ptr - self.digit_count[0]
+                delta = self.data_ptr - self.digit_count.pre_point
                 
                 # cursor left of decimal separator
                 if delta < 0:
@@ -1553,7 +1500,7 @@ class Value( Input ):
                 elif delta > 0:
                     self.data = ( self.data + ['']*delta )[delta:self.input_size]
                 
-                self.data_ptr = self.digit_count[0]
+                self.data_ptr = self.digit_count.pre_point
             
             case Key( np=None, an=ch ) if (self.data_ptr == self.input_size) and (ch.isdigit()) and (self.data[0] == ''):
                 # left shift data array and append user input (key) at end, if data has empty leading slots
@@ -1730,7 +1677,7 @@ class Button( Frame ):
     def render(self) -> None:
         assert self.position and self.bounding, "Position of Button is not set: use method set_position() to set the position"
         
-        Console.write_in( '\n'.join(self.create_button()), self.position.col, self.position.line, self.bounding.col, self.bounding.line, True, True )
+        Console.write_in( '\n'.join(self.create_button()), self.position, self.bounding, True, True )
     
     def forward_key(self, key:Key) -> None:
         match key:

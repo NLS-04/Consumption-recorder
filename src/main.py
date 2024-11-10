@@ -6,7 +6,7 @@ from locale   import setlocale, LC_ALL
 
 # Custom packages
 from generic_lib.logger    import get_logger
-from generic_lib.consoleIO import Console, Key, keyboard
+from generic_lib.consoleIO import Console, Key, keyboard, Point
 from generic_lib.utils     import *
 from constants             import *
 
@@ -96,7 +96,7 @@ def visualize_persons():
 def manipulate_readings():
     #todo: better description
     
-    Console.write_at( " --- ABLESUNG HINZUFÜGEN / ÜBERSCHREIBEN --- ", 0, 0 )
+    Console.write_at( " --- ABLESUNG HINZUFÜGEN / ÜBERSCHREIBEN --- ", Point(0, 0) )
 
     FM = Manager(True, True).set_position_left_top( SIZE_TAB, 2 )
     
@@ -121,17 +121,17 @@ def manipulate_readings():
 def manipulate_persons():
     #todo: better description
     
-    Console.write_at( " --- PERSON HINZUFÜGEN / ÜBERSCHREIBEN --- ", 0, 0 )
+    Console.write_at( " --- PERSON HINZUFÜGEN / ÜBERSCHREIBEN --- ", Point(0, 0) )
     
     names = db.get_all_names()
     tab   = ctrl.get_tabular_names(names)
     
     width, height = get_string_dimensions( tab )
     
-    Console.write_in( tab, 4, 2, 4+width, 2+height )
+    Console.write_in( tab, Point(4, 2), Point(4+width, 2+height) )
     
     with Console.virtual_area( (4+width+ 4, 2), reset_cursor_on_exit=False ):
-        Console.write_at( "Name der zu hinzufügenden oder zu überschreibenden db.Person eingeben", 0, 0 )
+        Console.write_at( "Name der zu hinzufügenden oder zu überschreibenden db.Person eingeben", Point(0, 0) )
 
         FM = Manager( True, True ).set_position_left_top( SIZE_TAB, 2 )
         
@@ -158,7 +158,7 @@ def manipulate_persons():
 def delete_reading():
     #todo: better description
     
-    Console.write_at( " --- ABLESUNG ENTFERNEN --- ", 0, 0 )
+    Console.write_at( " --- ABLESUNG ENTFERNEN --- ", Point(0, 0) )
     
     # sub menu management
     tab = tabulate( [
@@ -171,7 +171,7 @@ def delete_reading():
     ], tablefmt="simple", disable_numparse=True, colalign=('right', 'left') )
     tab_width, tab_height = get_string_dimensions( tab )
     
-    Console.write_in( tab, SIZE_TAB, 2, SIZE_TAB+tab_width, 2+tab_height)
+    Console.write_in( tab, Point(SIZE_TAB, 2), Point(SIZE_TAB+tab_width, 2+tab_height) )
     
     is_digit, option = digit_input( [1, 2] )
     
@@ -190,7 +190,7 @@ def delete_reading():
             delete_reading_multiple()
 
 def delete_person():
-    Console.write_at( " --- PERSON ENTFERNEN --- ", 0, 0 )
+    Console.write_at( " --- PERSON ENTFERNEN --- ", Point(0, 0) )
     #todo: better description
     
     names = db.get_all_names()
@@ -198,11 +198,11 @@ def delete_person():
     
     tab_width, tab_height = get_string_dimensions( table )
     
-    Console.write_in( table, SIZE_TAB, 2, SIZE_TAB+tab_width, 2+tab_height)
+    Console.write_in( table, Point(SIZE_TAB, 2), Point(SIZE_TAB+tab_width, 2+tab_height) )
     
     
     with Console.virtual_area( (SIZE_TAB + tab_width + SIZE_TAB, 2), reset_cursor_on_exit=False ):
-        Console.write_at( "Name der zu entfernenden db.Person eingeben", 0, 0 )
+        Console.write_at( "Name der zu entfernenden db.Person eingeben", Point(0, 0) )
         
         FM = Manager(True, True).set_position_left_top( SIZE_TAB, 2 )
         
@@ -257,7 +257,7 @@ def do_invoice():
                     ]
     
     table = tabulate( table_data, headers=["Personen", "Kosten", "€"], tablefmt="simple", floatfmt=digit_layout_to_format_specifier(DIGIT_LAYOUT_MONEY) )
-    viz = invoice.get_visualization( 100, Console.get_console_size()[0] )
+    viz = invoice.get_visualization( 100, Console.get_console_size().col )
     viz_width = max_width_of_strings(viz.splitlines())[1]
     
     Console.clear()
@@ -267,7 +267,7 @@ def do_invoice():
     Console.write_line( viz )
 
 def do_analyze():
-    Console.write_at( "Manuelle Analyse der Ablesungen über einen Zeitraum (Grenzen des Zeitraums sind inklusiv)", 0, 0 )
+    Console.write_at( "Manuelle Analyse der Ablesungen über einen Zeitraum (Grenzen des Zeitraums sind inklusiv)", Point(0, 0) )
     
     FM = Manager(True, True).set_position_left_top( SIZE_TAB, 2 ).append( Confirm_yes_no( "Bestätigen", "Zurück" ) )
     
@@ -322,7 +322,7 @@ def do_export_pdf():
 #---------------------------#
 
 def delete_reading_single():
-    Console.write_at( "Datum des zu entfernenden Eintrags eingeben", 0, 0 )
+    Console.write_at( "Datum des zu entfernenden Eintrags eingeben", Point(0, 0) )
     
     FM = Manager(True, True).set_position_left_top( SIZE_TAB, 2 )
     
@@ -342,7 +342,7 @@ def delete_reading_single():
     )
 
 def delete_reading_multiple():
-    Console.write_at( "Zeitintervall der zu entfernenden Einträge eingeben (Grenzen sind inklusiv)", 0, 0 )
+    Console.write_at( "Zeitintervall der zu entfernenden Einträge eingeben (Grenzen sind inklusiv)", Point(0, 0) )
     
     FM = Manager(True, True).set_position_left_top( SIZE_TAB, 2 )
     
@@ -392,7 +392,7 @@ def print_menu_options() -> None:
 
 def user_decline_prompt( col:int=None, line:int=None, absolute:bool=True ) -> None:
     if col != None and line != None:
-        Console.set_cursor( col, line, absolute )
+        Console.set_cursor( col, line, absolute=absolute )
     Console.write_line( " --- Handlung wurde abgebrochen" )
 
 def user_to_menu_prompt() -> None:
@@ -508,7 +508,7 @@ def manage_interactables(
     exists, data = db_get( fm_data )
     
     if unsuccessful_text and not exists:
-        Console.write_at( unsuccessful_text, 0, LINE_PTR+2 )
+        Console.write_at( unsuccessful_text, Point(0, LINE_PTR+2) )
         user_decline_prompt(0, LINE_PTR+3)
         return
     
@@ -536,7 +536,7 @@ def manage_interactables(
             return
     
     db_set( fm_data )
-    Console.write_at( successful_text, 0, LINE_PTR+3 )
+    Console.write_at( successful_text, Point(0, LINE_PTR+3) )
     Console.set_cursor(0, LINE_PTR+4)
 
 
