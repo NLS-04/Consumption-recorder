@@ -34,15 +34,10 @@ import pynput.keyboard as keyboard
 T = TypeVar("T", int, float)
 class Point():
     """ Simple 2-D Point """
-    __slots__ = [ "x", "y", "col", "line" ]
+    __slots__ = [ "x", "y" ]
     
     x: T
     y: T
-    
-    col : T
-    '''alias for x'''
-    line: T
-    '''alias for y'''
     
     def __init__(self, x:T, y:T) -> None:
         self.x    = x
@@ -54,6 +49,24 @@ class Point():
     def T(self) -> tuple[T, T]:
         '''alias for (x, y)'''
         return ( self.x, self.y )
+    
+    
+    @property
+    def col(self) -> T:
+        '''alias for x'''
+        return self.x
+    @col.setter
+    def col(self, value: T) -> None:
+        self.x = value
+    
+    @property
+    def line(self) -> T:
+        '''alias for y'''
+        return self.y
+    @line.setter
+    def line(self, value: T) -> None:
+        self.y = value
+    
     
     def __add__(self, _o:tuple[T, T]|Point[T]) -> Point[T]:
         return Point( self.x + _o[0], self.y + _o[1] )

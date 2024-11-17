@@ -12,7 +12,7 @@ import inspect
 
 
 from generic_lib.logger    import get_logger, logging
-from generic_lib.consoleIO import Console, Key, keyboard, Point
+from generic_lib.consoleIO import Console, Key, keyboard, Point, ansilen, Style, STYLE_TYPE
 from generic_lib.utils     import *
 from constants             import *
 
@@ -783,7 +783,7 @@ class Frame( Protocol ):
         get the dimensions of the frame as character-sizes
 
         Returns:
-            `tuple`[`int`, `int`]: ( width, height )
+            `tuple[int, int]`: ( width, height )
         """
         return ( self.bounding - self.position + Point(1, 1) ).T
 
