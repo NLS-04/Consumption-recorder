@@ -1050,7 +1050,7 @@ class Invoice:
             max_string_width (`int`, optional): maximum width the visualization never exceeds: None == +inf. Defaults to None.
 
         Returns:
-            "str": visualization of the tree
+            `str`: visualization of the tree
         """
         assert self.__solver_tree, ".get_invoice(...) must be called beforehand calling this .get_visualization() method"
         return Section_Person_Solver.visualize( self.__solver_tree, True, min_string_width, max_string_width )

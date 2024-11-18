@@ -59,6 +59,9 @@ from generic_lib.simpleTUI import Button_Manager, Button, Confirm_yes_no
 #------#
 # MISC #
 #------#
+# TODO backend_model::Invoice:  wrong calculation of distribution. => Use [time_of_inhabitation] / [reference_time_frame]
+#                               per person instead of the current tree like subdivision structure
+# TODO delete_reading:          when writing to screen in the virtual area, text may overflow into the left side when terminal window small
 #// TODO logging:      refactor logging for all files
 #// TODO dbHandler.py: add better typing support
 

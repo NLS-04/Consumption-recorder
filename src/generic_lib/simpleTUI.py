@@ -1,7 +1,7 @@
 from __future__      import annotations
 from collections.abc import Mapping
 from typing          import Self, Protocol, Callable, Sequence, Optional, Literal,\
-                            TypeVar, Final, final, runtime_checkable, overload, Any
+                            TypeVar, Final, final, runtime_checkable, overload, Any, ClassVar
 
 from enum     import Enum, auto
 from math     import floor, sqrt
@@ -14,8 +14,8 @@ import inspect
 from generic_lib.logger    import get_logger, logging
 from generic_lib.consoleIO import Console, Key, keyboard, Point, ansilen, Style, STYLE_TYPE
 from generic_lib.utils     import *
-from constants             import *
 
+from constants import PATH_LOGS
 
 #----------------------------------------------------------------------------------------------------------------------
 # Manage Logging
@@ -321,13 +321,21 @@ class Registerable( Protocol ):
 #----------------------------------------------------------------------------------------------------------------------
 # Manager stuffs
 #----------------------------------------------------------------------------------------------------------------------
+class TUI_Config:
+    DELIMITER   : ClassVar[str] = ": "
+    PLACE_HOLDER: ClassVar[str] = "_"
+
+    SIZE_TAB: ClassVar[int] = 4
+
+CONFIG = TUI_Config
+'''Config settings used by all TUI elements'''
+
 class Status(Enum):
     IDLE            = 0
     INPUT_ERROR     = 1
     USER_INTERRUPT  = 2
     COMPLETED_EMPTY = 3
     COMPLETED       = 4
-
 
 @LOGGER.remember_class
 class Manager():
@@ -743,7 +751,7 @@ class Manager():
     def _setup_interactable_titles( list_of_titles_sizes:list[int], list_of_sizes:list[Point[int]] ) -> tuple[int, int]:
         max_len_title = max( list_of_titles_sizes ) if list_of_titles_sizes else 0
         
-        validation_column_offset = SIZE_TAB + max( map( lambda s: s.col, list_of_sizes ) ) if list_of_sizes else SIZE_TAB
+        validation_column_offset = CONFIG.SIZE_TAB + max( map( lambda s: s.col, list_of_sizes ) ) if list_of_sizes else CONFIG.SIZE_TAB
 
         return max_len_title, validation_column_offset
 
@@ -808,6 +816,7 @@ class Plain_Text( Frame ):
         self.text = text
         
         if force_width is not None:
+            # may break with ansi color codes
             self.text = fill( self.text, force_width )
         
         self.bounding = Point( max_width_of_strings( self.text.splitlines() )[1]-1, len(self.text.splitlines())-1 )
@@ -864,8 +873,7 @@ class Input( Interactable, Registerable ):
     pos_validate: Point[int]
     '''starting position for validation messages'''
     
-    DELIMITER: Final[str] = ": "
-    formatted_name  : str
+    formatted_name: str
     
     name    : str
     data    : list[str]
@@ -887,7 +895,7 @@ class Input( Interactable, Registerable ):
         self.pos_validate = Point(0, 0)
         
         self.name = prompt_name
-        self.formatted_name = ("{:>%ds}" % len(self.name)).format( self.name ) + Input.DELIMITER
+        self.formatted_name = ("{:>%ds}" % ansilen(self.name)).format( self.name ) + CONFIG.DELIMITER
         
         self.status       = Status.IDLE
         self.input_size   = max( 0, input_size )
@@ -1036,7 +1044,7 @@ class Input( Interactable, Registerable ):
     
     def render_background(self) -> None:
         for i in range(self.input_size):
-            Console.write_at( PLACE_HOLDER, self.cursor(i), False )
+            Console.write_at( CONFIG.PLACE_HOLDER, self.cursor(i), False )
     
     
     def validate(self) -> None:
@@ -1133,8 +1141,8 @@ class Input( Interactable, Registerable ):
     # Interactable Override #
     #-----------------------#
     @final
-    def get_required_name_size(self) -> str:
-        return len( self.formatted_name )
+    def get_required_name_size(self) -> int:
+        return ansilen( self.formatted_name )
     @final
     def get_required_dimensions(self) -> Point[int]:
         return self.cursor( get_max_position=True )
@@ -1148,10 +1156,10 @@ class Input( Interactable, Registerable ):
     
     @final
     def set_offsets(self, name_format_shift:int, validate:Optional[tuple[int, int]]=None) -> None:
-        self.formatted_name = ("{:>%ds}" % max( 0, name_format_shift - len(Input.DELIMITER) )).format( self.name ) + Input.DELIMITER
-        self.pos_input = self.position + ( len(self.formatted_name), 0 )
+        self.formatted_name = ("{:>%ds}" % max( 0, name_format_shift - ansilen(CONFIG.DELIMITER) )).format( self.name ) + CONFIG.DELIMITER
+        self.pos_input = self.position + ( self.get_required_name_size(), 0 )
         
-        pos_valid_off     = validate if validate else ( self.cursor( get_max_position=True ).col + SIZE_TAB, 0 )
+        pos_valid_off     = validate if validate else ( self.cursor( get_max_position=True ).col + CONFIG.SIZE_TAB, 0 )
         self.pos_validate = self.pos_input + pos_valid_off
         
         self.bounding = max( self.pos_validate, self.pos_input + self.cursor( get_max_position=True ) ) + Point(self.MSG_MAX_SIZE, 0)
@@ -1173,8 +1181,8 @@ class Date( Input ):
     #? data:layout   = 'ddmmyyyy'
     #?     :indexing    01234567
     
-    DELIMITER  : Final[str] = '.'
-    DATE_FORMAT: str        = "%d%m%Y"
+    DATE_DELIMITER: Final[str] = '.'
+    DATE_FORMAT   : str        = "%d%m%Y"
     
     in_select_mode: bool
     select_index  : int
@@ -1208,8 +1216,8 @@ class Date( Input ):
         self.dates = preset_dates
     
     def render_foreground(self) -> None:
-        Console.write_at( self.DELIMITER, Point(2, 0), False )
-        Console.write_at( self.DELIMITER, Point(5, 0), False )
+        Console.write_at( self.DATE_DELIMITER, Point(2, 0), False )
+        Console.write_at( self.DATE_DELIMITER, Point(5, 0), False )
         
         super().render_foreground()
     
@@ -1290,8 +1298,8 @@ class Date_no_day( Input ):
     #? data:layout   = 'mmyyyy'
     #?     :indexing    012345
     
-    DELIMITER  : Final[str] = '.'
-    DATE_FORMAT: str        = "%m%Y"
+    DATE_DELIMITER: Final[str] = '.'
+    DATE_FORMAT   : str        = "%m%Y"
     
     in_select_mode: bool
     select_index  : int
@@ -1325,7 +1333,7 @@ class Date_no_day( Input ):
         self.dates = preset_dates
     
     def render_foreground(self) -> None:
-        Console.write_at( self.DELIMITER, Point(2, 0), False )
+        Console.write_at( self.DATE_DELIMITER, Point(2, 0), False )
         
         super().render_foreground()
     
@@ -1676,8 +1684,9 @@ class Button( Frame ):
     
     def render(self) -> None:
         assert self.position and self.bounding, "Position of Button is not set: use method set_position() to set the position"
-        
-        Console.write_in( '\n'.join(self.create_button()), self.position, self.bounding, True, True )
+
+        # we do not need to join the lines by \n since the write_in will automatically wrap each line as defined by the self.bounding
+        Console.write_in( ''.join(self.create_button()), self.position, self.bounding, True, True )
     
     def forward_key(self, key:Key) -> None:
         match key:
@@ -1718,10 +1727,10 @@ class Button( Frame ):
         else:
             middle = f"{line_v}{filler*self.inner_spacing.col}{self.prompt_name}{filler*self.inner_spacing.col}{line_v}"
 
-        middle_filler = f"{line_v}{filler*(2*self.inner_spacing.col+len(self.prompt_name))}{line_v}"
+        middle_filler = f"{line_v}{filler*(2*self.inner_spacing.col+ansilen(self.prompt_name))}{line_v}"
         
-        bound_top    = bound_top    % ( line_h*(len(middle)-(len(c_lt)+len(c_rt))) )
-        bound_bottom = bound_bottom % ( line_h*(len(middle)-(len(c_lb)+len(c_rb))) )
+        bound_top    = bound_top    % ( line_h*(ansilen(middle)-(ansilen(c_lt)+ansilen(c_rt))) )
+        bound_bottom = bound_bottom % ( line_h*(ansilen(middle)-(ansilen(c_lb)+ansilen(c_rb))) )
         
         return [
             bound_top,

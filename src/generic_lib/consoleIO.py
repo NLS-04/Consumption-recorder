@@ -752,9 +752,9 @@ class Console():
         """
         write the given string at the specified position in the terminal, but clear the area from (col, line) to (end_col, end_line) before writing
         
-        if end_col and end_line are `None`: 
-        - end_col will be set to the most right column position of the terminal
-        - end_line will be set to the same line as specified
+        if end_col_line is `None`: 
+        - end_col_line[0] will be set to the most right column position of the terminal
+        - end_col_line[1] will be set to the same line as specified
         
         Args:
             msg (`str`): text to be printed
@@ -1058,9 +1058,7 @@ class Console():
         e.g. writing at (0, 0) would actually write at the `left_top` position on the screen
         """
         left_top     = Point( *left_top )
-        right_bottom = Point( *right_bottom )
-        
-        right_bottom = right_bottom if right_bottom else cls.get_console_size()
+        right_bottom = Point( *right_bottom ) if right_bottom else cls.get_console_size()
         
         assert left_top.col <= right_bottom.col and left_top.line <= right_bottom.line, f"incompatible corners: left_top must be smaller or equal to right_bottom"
         assert left_top.col >= 0 and left_top.line >= 0, f"incompatible left_top corner: left_top corner coordinates are {left_top}, but both must be non-negative"
@@ -1274,30 +1272,31 @@ if __name__ == "__main__":
     Console.set_cursor( 0, 0 )
     
     # Testing Colors =================================================================================================
-    Console.write_line( "This is default" )
-    Console.set_style( "black", "white" )
-    Console.write_line( "This is inverted" )
-    Console.write_line( Style("black", "white").apply("This is also inverted") )
-    Console.rest_style()
+    # Console.write_line( "This is default" )
+    # Console.set_style( "black", "white" )
+    # Console.write_line( "This is inverted" )
+    # Console.write_line( Style("black", "white").apply("This is also inverted") )
+    # Console.rest_style()
     
-    with Console.virtual_area( (5,5), (25, 20) ):
-        with Console.stylized( "white", "#00aaaa" ): Console.clear()
-        with Console.stylized( styles=STYLE_TYPE.negative )              : sleep(1); Console.write_line( "This is inverted" )
-        with Console.stylized( "green", None, STYLE_TYPE.bold )          : sleep(1); Console.write_line( "This is in bold green" )
-        with Console.stylized( "blue", None, STYLE_TYPE.crossed )        : sleep(1); Console.write_line( "This is in crossed blue", Style("yellow", "black", STYLE_TYPE.blink).apply(", this is blinking yellow"), " and this is crossed blue again" )
-        with Console.stylized( "red", None, STYLE_TYPE.underline )       : sleep(1); Console.write_line( "This is in underlined red" )
-        with Console.stylized( "#ff00ff", "black", STYLE_TYPE.underline ): sleep(1); Console.write_line( "This is in underlined bold magenta" )
+    # with Console.virtual_area( (5,5), (25, 20) ):
+    #     with Console.stylized( "white", "#00aaaa" ): Console.clear()
+    #     with Console.stylized( styles=STYLE_TYPE.negative )              : sleep(1); Console.write_line( "This is inverted" )
+    #     with Console.stylized( "green", None, STYLE_TYPE.bold )          : sleep(1); Console.write_line( "This is in bold green" )
+    #     with Console.stylized( "blue", None, STYLE_TYPE.crossed )        : sleep(1); Console.write_line( "This is in crossed blue", Style("yellow", "black", STYLE_TYPE.blink).apply(", this is blinking yellow"), " and this is crossed blue again" )
+    #     with Console.stylized( "red", None, STYLE_TYPE.underline )       : sleep(1); Console.write_line( "This is in underlined red" )
+    #     with Console.stylized( "#ff00ff", "black", STYLE_TYPE.underline ): sleep(1); Console.write_line( "This is in underlined bold magenta" )
     
-    Console.set_cursor( 0, 20 )
+    # Console.set_cursor( 0, 20 )
     # Console.write_line( "This is default" )
     
     # Testing Console =================================================================================================
-    # with Console.virtual_area( (1,1), (5,5), False ):
-    #     w, h = Console.get_console_size()
-    #     for l in range(h+1):
-    #         for c in range(w+1):
-    #             Console.set_cursor( c, l, True )
-    #             Console.write( Console.get_key().get_char() )
+    with Console.virtual_area( (0,0), (10,2), False ):
+        w, h = Console.get_console_size()
+        Console.write( w, h, sep="" )
+        for l in range(h):
+            for c in range(w):
+                Console.set_cursor( c, l, absolute=True )
+                Console.write( Console.get_key().get_char() )
     
     
     # Testing code snippets ===========================================================================================
