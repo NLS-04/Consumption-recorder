@@ -139,6 +139,10 @@ class Style:
     csi_reset : ClassVar[str] = "\x1b[0m"
     csi_format: str
     
+    fg    : Optional[ int | str ]
+    bg    : Optional[ int | str ]
+    styles: Optional[ STYLE_TYPE | list[STYLE_TYPE] ]
+    
     @staticmethod
     def default() -> Style:
         """default Style, i.e. the ansi code which does unset all styles and colors and sets the terminals default"""
@@ -159,6 +163,9 @@ class Style:
             styles (`STYLE_TYPE | list[STYLE_TYPE]`, optional): combination or none special effects/styles. Defaults to no style.
         """
         # https://en.wikipedia.org/wiki/ANSI_escape_code#Colors
+        self.fg = fg
+        self.bg = bg
+        self.styles = styles
         self.csi_format = Style.csi_code( fg, bg, styles, True )
     
     def apply(self, *strings:str, sep:str=' ') -> str:
